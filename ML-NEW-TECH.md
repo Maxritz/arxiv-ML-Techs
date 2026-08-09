@@ -211,3 +211,102 @@ This digest filters the full cs.LG recent batch down to papers with concrete, ac
 4. **Eviction/sparse-attention audits exist now.** Sparse-attention selectivity counterfactual audit and Stage-Replay divergence study give you test harnesses to validate that compression actually preserves behavior before shipping.
 5. **Test-time scaling finally has a reproducibility framework** (prefix-tree budget formalism) and cheap test-time reasoning (GradCuit, Router-Mem early-exit).
 6. **Agentic RL recipes are converging**: hindsight critiques (HindSearch), group reflection (GRSD), observation-calibrated self-distillation, and CoPES (gradient-free post-training) cover the data/reward/training stack for agents.
+
+---
+
+# Part 2 — Constrained-Hardware Inference
+
+**Analysis target:** papers usable for (1) reducing VRAM usage, (2) streaming models from disk, (3) CPU-based inference, (4) distributed inference over the network, (5) using multiple low-end GPUs in parallel.
+
+## 13. VRAM Reduction (weights + KV cache + activation)
+
+| # | arXiv | Title | What it does for VRAM |
+|---|-------|-------|------------------------|
+| 1 | [2608.02901](https://arxiv.org/abs/2608.02901) | AnchorKV: Anchor-Residual KV Cache Compression | 20× KV-cache shrink with zero token loss; anchors stored exactly + residuals — keeps ~99% of full-cache score at 70B. The single highest-VRAM-savings-per-effort item here. |
+| 2 | [2608.04074](https://arxiv.org/abs/2608.04074) | Spend Bits Where Queries Look (KV VQ) | KV-cache vector quantization at 2 bits/element with attention-preserving transforms — cuts the dominant long-context VRAM/bandwidth term. |
+| 3 | [2608.02691](https://arxiv.org/abs/2608.02691) | Output-Aware Rotation for INT2 KV Cache | INT2 KV cache with post-W_O error minimization — deeper quantization without the usual accuracy cliff. |
+| 4 | [2608.05326](https://arxiv.org/abs/2608.05326) | QEvict | Recoverable quantized KV eviction; fixes the "evicted-forever" flaw with three-tier cache management. |
+| 5 | [2608.01247](https://arxiv.org/abs/2608.01247) | RestoreKV | LoRA-adapted "restore tokens" regenerate full-cache behavior from a small cache under aggressive eviction. |
+| 6 | [2608.03228](https://arxiv.org/abs/2608.03228) | SAKI | Training-free low-rank KV index that preserves attention scores (not reconstruction); beats key-PCA at every rank on 8B models. |
+| 7 | [2608.01536](https://arxiv.org/abs/2608.01536) | Celty: SpMspV GPU Kernel | Dual-sparse (unstructured weight pruning + activation sparsity) LLM decoding; RLC-CSC format skips memory accesses — lower VRAM traffic and cache pressure for single-user decode. |
+| 8 | [2608.06291](https://arxiv.org/abs/2608.06291) | BaKron: Kronecker-Factored Hessian Quantization | GPTQ-class quantization using two-sided Kronecker-Hessian curvature at GPTQ's O(mn(m+n)) cost → better low-bit weight compression. |
+| 9 | [2608.05499](https://arxiv.org/abs/2608.05499) | APQF | Agentic profiling-guided structured pruning + mixed-precision quantization + recovery — automated per-layer bit-width/pruning assignment for edge GPUs. |
+| 10 | [2608.04405](https://arxiv.org/abs/2608.04405) | BinaryPC: Training-Free Hashing Attention | Binary-PCA hash codes for sparse attention — training-free long-context acceleration, shrinks the effective KV read set. |
+| 11 | [2608.04401](https://arxiv.org/abs/2608.04401) | Elbow-Based MoE Routing | Training-free per-token dynamic expert count (5.3% avg latency cut, no accuracy loss) — less expert activation = less weight VRAM traffic. |
+| 12 | [2608.02989](https://arxiv.org/abs/2608.02989) | AcceptMoE | MoE speculative decoding that self-sizes verifier expert sets and conditions on cache residency under offloading — directly minimizes expert-weight traffic. |
+| 13 | [2608.05303](https://arxiv.org/abs/2608.05303) | EdgeXpert | HW/SW co-design resolving MoE + speculative-decoding incompatibility; prompt-wise expert reuse + depth-aware expert coalescing cut FFN memory access. |
+| 14 | [2608.03579](https://arxiv.org/abs/2608.03579) | Pin Once, Swap Light (SALT) | Ultra-LoRA (r≤2) serving: one shared centroid pinned in VRAM + tiny task residuals swapped over PCIe → tens-to-hundreds of adapters without VRAM blowup. **Core idea for multi-tenant VRAM. |
+| 15 | [2608.00860](https://arxiv.org/abs/2608.00860) | Kilobyte Models | A trained net = seed + quantized latent (mapping networks); bytes ≈ latent size, not parameter count. Extreme-weight compression for transfer/streaming. |
+| 16 | [2608.03796](https://arxiv.org/abs/2608.03796) | Efficient KD for LLMs | Offline top-K logit KD + fused chunked KL: teacher removed from memory during distillation, peak VRAM capped (memory-light way to produce small models). |
+| 17 | [2607.28292](https://arxiv.org/abs/2607.28292) | CACHE-UK | Stability-aware memory editing for 4-bit quantized LLMs (rank-1 LoRA subspace) — lets quantized small models stay accurate with cheap fact updates. |
+| 18 | [2608.05253](https://arxiv.org/abs/2608.05253) | AuroOFT | Quantized orthogonal fine-tuning + zero-start gated nonlinear residual — adapt low-bit models more expressively than plain qoft. |
+| 19 | [2608.02032](https://arxiv.org/abs/2608.02032) | DART | Decoded attention over recurrent (Mamba-2 SSD) states: attention-style retrieval over a fixed-size recurrent state instead of a growing cache. |
+
+## 14. Model Streaming from Disk / Offload / Weight Swapping
+
+| # | arXiv | Title | What it does |
+|---|-------|-------|--------------|
+| 1 | [2608.03579](https://arxiv.org/abs/2608.03579) | Pin Once, Swap Light (SALT) | The explicit pin-and-swap design: centroid resident in VRAM, low-rank residuals swapped host↔device over PCIe. Directly transferable to weight-slicing strategies for disk-backed LLMs. |
+| 2 | [2608.00860](https://arxiv.org/abs/2608.00860) | Kilobyte Models | Store only the seed+latent; regenerate weights on the target device — the extreme end of "stream less from disk." |
+| 3 | [2608.02989](https://arxiv.org/abs/2608.02989) | AcceptMoE | Explicitly models expert-weight *transfer traffic* and cache residency under offloading; eligibility decided by what's resident — a pattern for SSD-resident MoE weights. |
+| 4 | [2608.05303](https://arxiv.org/abs/2608.05303) | EdgeXpert | External-memory-access reduction for FFN layers; prompt-wise expert reuse means you can page-in only a shared expert set per prompt. |
+| 5 | [2608.02560](https://arxiv.org/abs/2608.02560) | PRECOG (Structured Memory for Edge LMs) | Pre-encode corpora as fixed SSM hidden states and inject O(1) — kills RAG prefill and KV growth, so edge/CPU devices can run RAG without caching long contexts. |
+| 6 | [2608.04428](https://arxiv.org/abs/2608.04428) | Deltoris | Temporal bit-sparsity + speculative inference: computes only deltas between consecutive inputs and amortizes data loading across steps — cuts off-chip traffic (relevant for disk/DRAM-bound inference). |
+| 7 | [2608.03893](https://arxiv.org/abs/2608.03893) | Cross-Model KV Cache Transfer | Linear ridge map reuses KV across model sizes → swap models mid-conversation *without* re-paying prefill (relevant for cascade/disk-backed model switching). |
+| 8 | [2608.01536](https://arxiv.org/abs/2608.01536) | Celty | Sparse format that vectorizes compressed weight columns and skips zero activations — fewer bytes pulled from HBM/disk per decode step. |
+
+## 15. CPU-Based Inference
+
+| # | arXiv | Title | What it does |
+|---|-------|-------|--------------|
+| 1 | [2608.01563](https://arxiv.org/abs/2608.01563) | Meganeura | Portable GPU inference/training compiled through **Vulkan and Metal** — runs the same compiled graph on NVIDIA, AMD discrete, AMD APU, Apple Silicon, **and Intel iGPUs**, 48/50 cells passing, often within ~1.1–1.8× of native. Practical route to CPU/iGPU-adjacent execution without per-vendor toolchains. |
+| 2 | [2608.02560](https://arxiv.org/abs/2608.02560) | PRECOG (Structured Memory for Edge LMs) | SSM-state injection makes long-context/RAG tractable on edge and CPU: O(1) prefill per query, fixed-size recurrent state instead of KV cache. |
+| 3 | [2607.29353](https://arxiv.org/abs/2607.29353) | ECL: Versatile On-device Adaptation | Unifies few-shot/zero-shot/continual/in-context learning *on-device* (embedder-centric learning) — for CPU/edge personalization without cloud retraining. |
+| 4 | [2608.05064](https://arxiv.org/abs/2608.05064) | Certified Deferral for Small LMs | When small/CPU-hosted models should defer to a human; Clopper-Pearson finite-sample risk certificates for 0.5–14B models on local hardware. |
+| 5 | [2608.04980](https://arxiv.org/abs/2608.04980) | Protoreasoning in Tiny Transformers | CoT/protoreasoning demonstrated at ~1M-parameter scale — evidence that reasoning techniques transfer to tiny CPU-runnable models. |
+| 6 | [2608.03148](https://arxiv.org/abs/2608.03148) | Lightweight Chunk Selection for Mobile RAG | Evidence-alignment chunk selector for mobile RAG budgets — reduces what must be ingested/generated on-device. |
+| 7 | [2608.00720](https://arxiv.org/abs/2608.00720) | CascadeLUT | LUT-based streaming inference on FPGAs (no multipliers, 4–12.5× lower latency, 3–5× throughput on bandwidth-limited hardware). |
+| 8 | [2608.06177](https://arxiv.org/abs/2608.06177) | Threshold-Based Early Stopping of Accumulations (binary activation) | Early-stopped MAC accumulation in binary-activation nets — power/latency win pattern for low-end CPUs/iGPUs. |
+| 9 | [2608.03711](https://arxiv.org/abs/2608.03711) | Attention is Case-Sensitive | (bonus) Formatting lever to concentrate attention — free accuracy on small models without compute cost. |
+| ⚠️ | [2608.00737](https://arxiv.org/abs/2608.00737) | Embedded RISC-V KAN eval | **Caution:** KAN "parameter efficiency" evaporates on real embedded CPUs — 13.5×/8.0× slower and 11.3× more energy than MLP under PTQ on RISC-V. Don't assume small-parameter = fast on CPU. |
+| ⚠️ | [2608.03854](https://arxiv.org/abs/2608.03854) | Quantization Effects on Biomedical LLM Reliability | **Caution:** INT4/INT8 classifier calibration depends on the *probability extraction protocol* (summed vs mean log-likelihood reverses calibration ranking). On CPU you must re-verify calibration, not just accuracy. |
+
+## 16. Distributed Inference over Network / Collaborative
+
+| # | arXiv | Title | What it does |
+|---|-------|-------|--------------|
+| 1 | [2608.02031](https://arxiv.org/abs/2608.02031) | Collaborative MEC for LLM Inference | Transformer-enhanced PPO scheduling that distributes LLM inference subtasks across collaborative mobile edge servers under soft deadlines — a ready framework for splitting inference across a network of nodes. |
+| 2 | [2607.29659](https://arxiv.org/abs/2607.29659) | GQ-FSL: Green Quantized Federated Split Learning | Split learning: client runs a sub-model, server runs the rest, quantized asymmetric precision on each side; joint split-point+precision optimization with convergence bound → offload compute to a networked server. |
+| 3 | [2607.29071](https://arxiv.org/abs/2607.29071) | FedSLM | Heterogeneous compressed clients (SVD low-rank) that stay self-contained and aggregatable — pattern for weak nodes contributing to / serving parts of a foundation model. |
+| 4 | [2608.02378](https://arxiv.org/abs/2608.02378) | Gecko | Split public/private inference: run a public encoder client-side (or on a cheap node), evaluate only a compact predictor under crypto — the split-inference security/bandwidth pattern. |
+| 5 | [2608.04893](https://arxiv.org/abs/2608.04893) | When Does Latent Communication Pay? | Causal audit of relayed KV caches in multi-agent LLMs: relaying latent state only pays when the receiver *needs the sender's private info* (100% vs 23–25% otherwise). **Design rule for networked/distributed LLM comms: send text unless the peer needs your hidden state. |
+| 6 | [2608.05944](https://arxiv.org/abs/2608.05944) | Multi-Node Full Fine-Tuning on B300 (Field Report) | Operational telemetry/triage for multi-node FSDP/ZeRO-3 training: power-draw tables to distinguish compute/comm/data-starvation/deadlock, NFS vs local caching measurements. Useful ops playbook if you run multi-node. |
+| 7 | [2608.00916](https://arxiv.org/abs/2608.00916) | Tevatron Meets Megatron | Expert-parallel reranker training on academic budgets (Megatron backend in Tevatron) — distributed-training infra for MoE without H100 clusters. |
+| 8 | [2608.01975](https://arxiv.org/abs/2608.01975) | TELLER | Non-intrusive cross-layer root-cause analysis for LLM inference (request spans engine + CUDA + distributed comms) — the observability tool you'll want when debugging a networked inference stack. |
+| 9 | [2608.06135](https://arxiv.org/abs/2608.06135) | LLM Inference Under Bursty Workloads | Modified WAIT scheduler with online request-intensity estimation for bursty traffic — throughput/latency control for shared network inference. |
+
+## 17. Parallel / Low-End GPU Utilization (many weak cards as one)
+
+| # | arXiv | Title | What it does |
+|---|-------|-------|--------------|
+| 1 | [2608.01563](https://arxiv.org/abs/2608.01563) | Meganeura | Proven cross-vendor (NVIDIA/AMD/Intel iGPU/APU) portable execution — the enabling layer for "whatever cards you own, run the same model." |
+| 2 | [2608.05033](https://arxiv.org/abs/2608.05033) | SparseDitto | LLM-agent system that *generates a GPU kernel per matrix/operator/target GPU* (SpMV/SpMM/SpGEMM) — adapts to whatever GPU each node has, closing the 350× cuSPARSE format gap. Great for heterogenous clusters. |
+| 3 | [2608.05499](https://arxiv.org/abs/2608.05499) | APQF | Automated per-layer pruning + bit-widths by measured sensitivity — makes old/low-VRAM cards usable with the least accuracy loss. |
+| 4 | [2608.04428](https://arxiv.org/abs/2608.04428) | Deltoris | Bit-level sparsity + speculative inference co-design for edge VLAs (50–200 Hz control loops) — shows how to make real-time inference fit low-end hardware. |
+| 5 | [2608.05303](https://arxiv.org/abs/2608.05303) | EdgeXpert | MoE + speculative decoding made compatible → each weak card only needs a subset of experts resident. |
+| 6 | [2608.00860](https://arxiv.org/abs/2608.00860) | Kilobyte Models | Regenerable weights mean you can broadcast a model to N weak cards with near-zero transfer cost. |
+| 7 | [2608.03695](https://arxiv.org/abs/2608.03695) | Dynamic Graph Clustering on GPU (cuGraph) | Multi-GPU via Dask workload distribution (~1000× vs CPU) — pattern for distributing workloads across low-end cards. |
+| ⚠️ | [2607.28097](https://arxiv.org/abs/2607.28097) | From Expert Reduction to Behavioral Divergence | **Critical warning for multi-card MoE:** mathematically-equivalent expert-reduction/aggregation orders produce *different outputs* (720 A-mode orders → 10 continuation basins; one prompt forks into "202 layoffs vs 113 hiring"). If you shard experts across cards, you MUST standardize aggregation order and test determinism, or outputs diverge between machines. |
+
+## 18. Recommended stack for "run a big LLM on weak hardware"
+
+Combining the batch into a concrete pipeline:
+
+1. **Weights → VRAM:** quantize with BaKron (Kron-Hessian-aware) or APQF (sensitivity-guided mixed precision), prune with Celty-style dual sparsity.
+2. **KV cache:** AnchorKV (20×) or SAKI/INT2-OptR for the cache; DART/Mamba-2-style recurrent states to remove it entirely where possible.
+3. **If VRAM still short → disk streaming:** SALT pin-and-swap pattern for adapters/experts, AcceptMoE cache-residency-aware expert paging, Kilobyte-seed regeneration as the extreme.
+4. **If no GPU / CPU-only:** Meganeura (Vulkan/Metal portable kernels) + PRECOG (SSM state injection to kill prefill cost) + ECL for on-device adaptation + Certified Deferral for risk-controlled small-model serving.
+5. **If you have multiple weak GPUs:** Meganeura for portability, SparseDitto for per-GPU kernels, split-inference from GQ-FSL/Gecko across nodes, MEC-PPO for scheduling — and **respect the MoE aggregation-order determinism warning (2607.28097)** before sharding experts.
+6. **Network/distributed:** relay text (not KV) unless the peer needs private hidden state (2608.04893); use Cross-Model KV Transfer when cascading model sizes; run TELLER-style tracing for debugging.
+
+**Honest gap note:** within this batch there is no paper that directly implements llama.cpp-style CPU weight-streaming, mmap-from-disk weight loading, or a full multi-card tensor-parallel runtime. The closest actionable items are the pin-and-swap (SALT), cache-residency-aware expert offloading (AcceptMoE), split learning (GQ-FSL/Gecko), portable kernel generation (Meganeura/SparseDitto), and the KV-cache compression cluster — plus the determinism warning (2607.28097) that matters before any expert sharding.
