@@ -310,3 +310,103 @@ Combining the batch into a concrete pipeline:
 6. **Network/distributed:** relay text (not KV) unless the peer needs private hidden state (2608.04893); use Cross-Model KV Transfer when cascading model sizes; run TELLER-style tracing for debugging.
 
 **Honest gap note:** within this batch there is no paper that directly implements llama.cpp-style CPU weight-streaming, mmap-from-disk weight loading, or a full multi-card tensor-parallel runtime. The closest actionable items are the pin-and-swap (SALT), cache-residency-aware expert offloading (AcceptMoE), split learning (GQ-FSL/Gecko), portable kernel generation (Meganeura/SparseDitto), and the KV-cache compression cluster — plus the determinism warning (2607.28097) that matters before any expert sharding.
+
+---
+
+# Part 3 — Mechanism Menu (domain-agnostic ideas, any paper in the batch)
+
+Part 2 listed papers already framed for LLMs. This part is the **idea toolbox**: mechanisms from *any* paper in the 992-entry batch that could be lifted and re-targeted to your five goals — reducing VRAM, disk streaming, CPU inference, distributed inference, and parallel use of low-end cards. Nothing here requires the source to be an LLM paper.
+
+Legend: 🧠 VRAM · 💾 disk/stream · ⚡ CPU · 🌐 network/distributed · 🎴 low-end parallel
+
+---
+
+## A. Weight storage as a "recipe," not a table
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Seed + latent regeneration** | [2608.00860](https://arxiv.org/abs/2608.00860) Kilobyte Models | Store only a random seed + small quantized latent; regenerate weights on device via a mapping network. Storage/transfer cost ≈ latent size, not parameter count. → Extreme disk streaming: the model file on disk is kilobytes; the device re-derives weights. | 💾🧠 |
+| **Multi-precision from one checkpoint** | [2608.04048](https://arxiv.org/abs/2608.04048) Recurrent Residual Quantization | Weights = 2-bit base + sequence of 2-bit residuals → 2/4/6/8-bit all derivable from ONE stored file, calibration-free. One model on disk serves many VRAM budgets; adapt to device by how many residual layers you load. | 💾🧠⚡ |
+| **Compress along 3 axes at once** | [2608.00859](https://arxiv.org/abs/2608.00859) SparseKAN | Learnable gates over basis functions × neurons × bit-width, hardened into dense tensors (not masks). Compression knob for arbitrary parameterized-function layers, incl. KAN-style and polynomial activations. | 🧠💾 |
+| **Binary nets with restored expressivity** | [2608.01490](https://arxiv.org/abs/2608.01490) BiKAN | Fixes the "all even powers collapse to 1" failure of 1-bit nets by injecting Walsh parity terms computed with the same XNOR-popcount ops. Idea: don't just binarize — engineer a basis that survives binarization. | 🧠⚡ |
+| **Gradient-free, tiny-footprint weight updates** | [2608.01624](https://arxiv.org/abs/2608.01624) Not the Dimension, the Norm | Full-weight random perturbation search is unnecessary; what matters is the *norm/subspace* of the perturbation. Enables adapting a model with a handful of trainable scalars — minimal VRAM for fine-tuning on weak cards. | 🧠🎴 |
+| **Low-rank weight modeling without Adam's bias** | [2608.05136](https://arxiv.org/abs/2608.05136) The Loss Does Not See the Basis, but Adam Does | Which optimizers actually drive factored (low-rank) models to low-rank solutions (GD/Muon/Shampoo yes; Adam/RMSProp no). Guidance for choosing optimizers that yield compact factors on disk. | 🧠💾 |
+
+## B. Computation that skips work (CPU / low-end friendly)
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Early-stop accumulations by sign certainty** | [2608.06177](https://arxiv.org/abs/2608.06177) Threshold-Based Early Stopping | In binary nets the running partial sum's final sign is often predictable early — stop adding. Trivial to port to any dot-product-heavy kernel (int8 SIMD, CPU): skip the tail of the accumulation once the partial sum is "decided." | ⚡🎴🧠 |
+| **Early-exit / progressive execution** | [2608.01285](https://arxiv.org/abs/2608.01285) Stop When Memory Suffices | Router decides whether evidence already suffices → terminate early. Idea generalizes: per-request layer/step budgets for weak devices. | ⚡🎴💾 |
+| **Dynamic width pruning per token** | [2607.28418](https://arxiv.org/abs/2607.28418) WIDE | Token-level dynamic width pruning, end-to-end differentiable — compute spent proportional to token difficulty, on a per-token basis. | 🧠⚡ |
+| **Streaming input, progressive prediction** | [2608.00720](https://arxiv.org/abs/2608.00720) CascadeLUT | Instead of buffering full input, feed feature subsets in order and refine prediction as they arrive. Same trick inverts for generation: emit/score partial outputs while next chunks are still streaming from disk. | 💾⚡ |
+| **Dual-sparse (weight + activation) kernels** | [2608.01536](https://arxiv.org/abs/2608.01536) Celty | Co-designed sparse format + SIMT core that skips zero-weight AND zero-activation work with run-length compressed columns. Direct CPU/GPU speedup + less memory traffic. | ⚡🧠🎴 |
+| **Data-aware hashing instead of attention scan** | [2608.04405](https://arxiv.org/abs/2608.04405) BinaryPC | Binary PCA hash codes: nearest-KV lookup by hash instead of scanning all KV pairs. Training-free, data-aware — a pattern for fast lookup over large cached state on slow hardware. | 🧠⚡ |
+| **Learn when attention should be sparse** | [2608.02938](https://arxiv.org/abs/2608.02938) LTGA | Learn a per-edge Tsallis entropy index interpolating heavy-tail↔softmax↔compact attention. If the model can learn to use compact attention on easy connections, compute collapses on the average case. | 🧠⚡ |
+| **Skip quantization work for redundant params** | [2608.06291](https://arxiv.org/abs/2608.06291) BaKron | Kronecker-Hessian-informed adaptive rounding at GPTQ cost — better low-bit quality, i.e. same accuracy at fewer bits → less VRAM/disk. | 🧠💾 |
+
+## C. Portable execution across whatever hardware exists
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Compile once, run on any GPU/iGPU/APU** | [2608.01563](https://arxiv.org/abs/2608.01563) Meganeura | Vulkan + Metal backend from one typed static graph; autodiff, optimizer, memory planner, runtime all portable. Runs NVIDIA/AMD/Intel/Apple incl. iGPUs and APUs. → Your "low-end cards" (old GPUs, iGPUs, APUs) all become first-class targets. | ⚡🎴 |
+| **Generate the kernel per-hardware, not one universal kernel** | [2608.05033](https://arxiv.org/abs/2608.05033) SparseDitto | LLM-agent picks representation/execution strategy per (matrix, operator, target GPU). Closes a 350× gap between cuSPARSE formats. → Every weak card gets a kernel tuned to its own capabilities. | 🎴⚡🧠 |
+| **Design-time energy/feasibility planning** | [2608.03589](https://arxiv.org/abs/2608.03589) Design-Time DNN for Intermittent Learning on MCUs | Hardware-aware energy predictor + multi-objective optimization to pick a DNN that fits intermittent, energy-budgeted devices *before* deployment. Idea: size the model to the sustained power of your weakest node, and checkpoint for arbitrary interruption. | ⚡💾🎴 |
+| **Contraction-plan ranking before execution** | [2608.05819](https://arxiv.org/abs/2608.05819) Learn-to-Rank Tensor Contraction Plans | GPU performance of equivalent tensor-contraction plans varies wildly; learn-to-rank plans from structural features before running. Applicable to any tensor-op scheduling choice on heterogeneous hardware. | 🎴⚡ |
+
+## D. Growing / elastic models (adapt to available resources over time)
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Grow hidden units to restore plasticity** | [2608.01475](https://arxiv.org/abs/2608.01475) Plasticity of Growing & Elastic Nets | Incrementally add randomly-initialized units preserves learning ability in online learning. Idea: models that can *grow* — start tiny on the weakest card, add capacity as compute becomes available. | 🎴💾🧠 |
+| **Parameter-free routing / modular specialization** | [2608.04084](https://arxiv.org/abs/2608.04084) SpecDrop | Fixed category-conditioned routing beats learned routers at matched budgets. Idea: deterministic module-to-device assignment (no learned router to train/serve) for sharding across cards. | 🎴🌐 |
+| **Superposition experts** | [2608.05303](https://arxiv.org/abs/2608.05303) EdgeXpert (idea) | Route by *prompt-level* expert reuse: one shared expert set per prompt instead of per-token — fewer distinct weights needed resident. | 🧠💾🎴 |
+
+## E. Split / distributed mechanisms (any weak node participates)
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Split learning with asymmetric precision per side** | [2607.29659](https://arxiv.org/abs/2607.29659) GQ-FSL | Cut the model: weak node runs low-precision shallow layers, server runs the rest, cut-layer data quantized for the network. Joint optimization of split point + bit-widths. → Direct blueprint for "distributed inference over a network." | 🌐🎴⚡ |
+| **Offload the heavy public encoder** | [2608.02378](https://arxiv.org/abs/2608.02378) Gecko | Run a public encoder outside the trust/protection boundary; only the small private tail is evaluated expensively. Same pattern with perf: run the big general encoder on the server, tiny task-tail on the device. | 🌐🎴 |
+| **Heterogeneous clients stay self-contained** | [2607.29071](https://arxiv.org/abs/2607.29071) FedSLM | SVD-decompose each client's model so low-rank subspaces are aggregatable yet each node remains standalone. Idea: shard by SVD subspace — nodes need only their rank slice, not the full matrix. | 🌐🎴🧠 |
+| **Sparse incremental aggregation over a ring** | [2608.03436](https://arxiv.org/abs/2608.03436) FedRings | Ring-topology, link-aware scheduling, adaptive sparse incremental aggregation + historical compensation for interruptions. → Distributed inference on intermittent/mobile links (LEO sats, ad-hoc LAN). | 🌐 |
+| **Reuse cached updates, send only deltas** | [2608.05358](https://arxiv.org/abs/2608.05358) DG-FedReuse | Gate stale cached updates with a gradient-discrepancy proxy; fresh updates use per-tensor Top-K. 83–85% uplink savings at ~0 accuracy cost. → For a fleet of weak nodes, don't retransmit what didn't change. | 🌐💾 |
+| **Communication protocol = the bottleneck, design for it** | [2608.05327](https://arxiv.org/abs/2608.05327) Collaborative Communication via Coarsening | Provably: a short high-utility protocol exists if communication complexity is small — and designing it can be NP-hard. Implication: for distributed inference, *minimize bits per node* (quantize/coarsen the messages), don't just scale the pipe. | 🌐 |
+| **Freshness-aware scheduling** | [2608.01128](https://arxiv.org/abs/2608.01128) MA-HEAD-Net | Age-of-Information-optimal scheduling with mini-slot embedding + adaptive checkpoints for heterogeneous traffic. → When nodes produce partial results over a network, schedule which result to wait for vs discard by its "age." | 🌐⚡ |
+| **Collaborative MEC scheduling for LLM subtasks** | [2608.02031](https://arxiv.org/abs/2608.02031) Collaborative MEC | Transformer-enhanced PPO splits LLM inference subtasks across edge servers under soft deadlines. → The scheduler layer for a distributed inference pool. | 🌐🎴 |
+| **Relay hidden state only when it's needed** | [2608.04893](https://arxiv.org/abs/2608.04893) When Does Latent Communication Pay? | KV-cache relay only pays when the receiver needs the sender's private info (100% vs 23–25%). → Distributed nodes: send text unless the peer genuinely needs your hidden state. | 🌐💾 |
+
+## F. Low-end parallelism (many weak cards as one)
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Per-GPU specialization via generated kernels** | [2608.05033](https://arxiv.org/abs/2608.05033) SparseDitto (see C) | Each node compiles kernels matched to its own GPU → a heterogenous cluster behaves better than its weakest-link uniform baseline. | 🎴 |
+| **Workload distribution across cards** | [2608.03695](https://arxiv.org/abs/2608.03695) cuGraph multi-GPU | Dask-based distribution of graph clustering across multiple GPUs (~1000× vs CPU). The Dask-style scatter/gather pattern ports to model serving across cards. | 🎴🌐 |
+| **Growing architecture on each card** | [2608.01475](https://arxiv.org/abs/2608.01475) Growing nets (see D) | Each weak card can run a *smaller slice* that grows; ensemble of growing slices ≈ one big model over time. | 🎴💾 |
+| **Determinism guardrail before sharding** | [2607.28097](https://arxiv.org/abs/2607.28097) Expert-Reduction Divergence | Any cross-card MoE/expert sharding MUST fix aggregation order; equivalent orders yield different outputs. Test per-machine reproducibility first. | 🎴🌐 |
+
+## G. Memory & bandwidth, the shared theme
+
+| Mechanism | Source | Idea | Targets |
+|-----------|--------|------|---------|
+| **Query-aware bit allocation** | [2608.04074](https://arxiv.org/abs/2608.04074) KV VQ | Spend bits where the query looks — transform derived from a distortion criterion, not a fixed rotation. Pattern: allocate precision by what the consumer actually reads. | 🧠💾 |
+| **Anchor-residual decomposition** | [2608.02901](https://arxiv.org/abs/2608.02901) AnchorKV | Keep a small exact "anchor" set; express the rest as residuals to their nearest anchor; refine only the impactful ones. Generalizes from KV cache to *any* large tensor/state that must stay resident. | 🧠💾 |
+| **Cache-residency-aware eviction/paging** | [2608.02989](https://arxiv.org/abs/2608.02989) AcceptMoE | Decide what stays resident by expected future commitment (offline-estimated), not just current score — the right policy for disk-paged weights. | 💾🎴 |
+| **Restore/regenerate rather than keep everything** | [2608.01247](https://arxiv.org/abs/2608.01247) RestoreKV | One cheap adapted pass reconstructs full-cache behavior from a tiny cache. Idea: store a compact "regenerator," derive the big state on demand. | 💾🧠 |
+| **Recurrent state instead of growing cache** | [2608.02032](https://arxiv.org/abs/2608.02032) DART | Fixed-size recurrent state + attention-style decoding from it → long context without a growing KV buffer. | 🧠💾 |
+| **Query-efficient sparse sampling** | [2607.28047](https://arxiv.org/abs/2607.28047) Query-Efficient Volume Rendering | Sparse query strategy for implicit volumes when each query is a neural inference. Idea: when every read from "memory" is expensive (disk-backed models), read as few entries as possible with adaptive sampling. | 💾⚡ |
+| **Lightweight parameter-efficient representations** | [2608.03041](https://arxiv.org/abs/2608.03041) PLAN | Parallelized liquid-neural dynamics: discretized, parallel form of a sequential recurrent model — keeps the parameter efficiency of liquid/SSM-style models while removing the sequential bottleneck. | 🧠⚡ |
+
+---
+
+## Summary: which mechanism to steal for which goal
+
+| Your goal | Steal this mechanism (best matches) |
+|-----------|-------------------------------------|
+| **Reduce VRAM** | RRQ one-checkpoint-multi-precision (2608.04048), AnchorKV anchor-residual (2608.02901), KV VQ bit allocation (2608.04074), SparseKAN 3-axis compression (2608.00859), BaKron curvature-aware bits (2608.06291) |
+| **Stream model from disk** | Seed+latent regeneration (2608.00860), AcceptMoE residency-aware paging (2608.02989), RestoreKV regenerate-on-demand (2608.01247), Kilobyte-broadcast to N nodes |
+| **CPU inference** | Early-stop accumulations (2608.06177), Meganeura Vulkan/Metal portability (2608.01563), WIDE token-level dynamic width (2607.28418), CascadeLUT streaming-input (2608.00720), PLAN parallel liquid nets (2608.03041) |
+| **Distributed over network** | GQ-FSL split learning + asymmetric precision (2607.29659), FedRings ring aggregation (2608.03436), DG-FedReuse delta-only updates (2608.05358), MEC-PPO scheduler (2608.02031), Gecko encoder-offload split (2608.02378) |
+| **Parallel low-end cards** | SparseDitto per-GPU kernels (2608.05033), Meganeura cross-vendor runtime (2608.01563), FedSLM SVD-subspace sharding (2607.29071), SpecDrop parameter-free module routing (2608.04084), growing nets (2608.01475) — with the determinism guardrail (2607.28097) |
+
+**The meta-idea:** the batch's strongest reusable insight isn't any single paper — it's that the five goals are all the same problem seen from five sides: **"make the working set smaller than the available memory, and only ever pay for what the current query needs."** Seed-regeneration and RRQ solve *disk size*; anchor-residual and residency-aware paging solve *resident size*; dynamic width, early-stop, and CascadeLUT solve *compute spent*; split learning and FedRings solve *what must travel*; SparseDitto and Meganeura solve *where it can run*.
