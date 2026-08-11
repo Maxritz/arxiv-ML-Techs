@@ -453,5 +453,21 @@ Online search results on arXiv for GGUF model execution, local llama.cpp/Ollama 
 | 4 | [2607.10137](https://arxiv.org/abs/2607.10137) | RDQ: Residual Distribution Quantization for Large Language Models | Fixes residual stream distributional drift in sub-4-bit GGUF PTQ, correcting accumulated layer noise to preserve sub-4-bit model accuracy. |
 | 5 | [2606.12280](https://arxiv.org/abs/2606.12280) | Holding the FP8 Quality Ceiling at 8-Bit Weights and Activations | Applies GGUF INT8 post-training quantization to a 9.3B flow-matching transformer for consumer GPU deployment. |
 
+---
+
+# Part 7 — Advanced LLM Offloading & Scheduling Infrastructure
+
+Online search results on arXiv for KV-cache offloading, host-to-device prefetching, SLO-aware scheduling, and tensor-granularity offload:
+
+| # | arXiv | Title | Focus & Key Insights |
+|---|-------|-------|----------------------|
+| 1 | [2607.26475](https://arxiv.org/abs/2607.26475) | DualDecoder: Accelerate Long Context LLM Inference by Predictive Prefetch | Eliminates the GPU memory wall by **predictive prefetching** of critical KV entries from host DRAM over PCIe, overlapping host-to-device transfers with previous token decoding. Increases decoding throughput by up to 2.62×. |
+| 2 | [2608.06557](https://arxiv.org/abs/2608.06557) | Cascade: Exploiting SLO-Aware Latency Budget for Fair and High Goodput LLM Inference Serving | Continuously updates per-request "latency headroom budget" to jointly govern queue scheduling and multi-tier KV-cache management (retire, restore, prefetch, or recompute). Cuts SLO violations by 40% and boosts goodput by 2.4× over vLLM FCFS. |
+| 3 | [2607.10183](https://arxiv.org/abs/2607.10183) | ATSInfer: Automated Tensor Scheduling for Hybrid CPU-GPU LLM Inference on Consumer Devices | **Tensor-granularity** (not layer/expert) offload scheduler for hybrid CPU-GPU LLM inference on laptops/desktops when VRAM is tight. Async CPU-GPU coordination delivers 1.94× prefill and 3.29× decode throughput improvement over coarse offload. |
+| 4 | [2607.20481](https://arxiv.org/abs/2607.20481) | Routing Without Training: Controllable-Ratio LLM Offloading via Reliability Gating | Training-free edge-cloud offload router using reliability gating to route hard queries to cloud while processing confident queries locally. |
+| 5 | [2608.05926](https://arxiv.org/abs/2608.05926) | BALANCE: Hybrid Autoregressive-Speculative LLM Inference in Wireless Edge Networks | Jointly schedules autoregressive decoding and speculative draft verification offloading across edge nodes. |
+| 6 | [2608.06135](https://arxiv.org/abs/2608.06135) | LLM Inference Under Bursty Workload Distribution: Modifying the WAIT Algorithm | Online request-intensity estimation modifying the WAIT scheduling algorithm for bursty LLM traffic. |
+
+
 
 
