@@ -439,4 +439,19 @@ Online search results on arXiv for CPU LLM inference, SIMD kernel co-design, hyb
 | 5 | [2607.17415](https://arxiv.org/abs/2607.17415) | Transition-Aware Backend Dispatch for Edge LLM Inference | Dynamic operator dispatch across edge CPU, GPU, and ONNX Runtime CPU backends accounting for shape transitions → 17.4% latency and 14.4% energy cuts on Jetson. |
 | 6 | [2607.12839](https://arxiv.org/abs/2607.12839) | HeteroMosaic: Energy-Efficient Edge LLM Inference | Fine-grained scheduler mapping transformer sub-ops across CPU, iGPU, and NPU on edge SoCs. |
 
+---
+
+# Part 6 — GGUF Format, Speculative Decoding & Safety under Quantization
+
+Online search results on arXiv for GGUF model execution, local llama.cpp/Ollama benchmarks, and safety decoupling under low-bit GGUF:
+
+| # | arXiv | Title | Focus & Key Insights |
+|---|-------|-------|----------------------|
+| 1 | [2607.03876](https://arxiv.org/abs/2607.03876) | AdaptiveSD: A Stability-Aware, Runtime-Adaptive Speculative Decoding Framework for CPU-Constrained LLM Inference | Tailored specifically for **GGUF-quantized models** on CPU-constrained devices. Uses an 11-rule policy hierarchy, dynamic heuristic/RL draft controller, and INT8 shadow buffer KV cache coordination layer to prevent resource exhaustion and bandwidth bottlenecks on pure CPU execution. |
+| 2 | [2606.10154](https://arxiv.org/abs/2606.10154) | Quality Is Not a Safety Proxy Under Quantization | Audits **7-level GGUF quantization ladders** (Q2_K through Q8_0) across 6 LLM families. Discovers benchmark quality and refusal/safety behavior decouple under low-bit GGUF (quality stays stable while refusal rate drops 12–68 percentage points). Proposes the Refusal Template Stability Index (RTSI) to catch safety drift. |
+| 3 | [2607.14181](https://arxiv.org/abs/2607.14181) | Quantize with Confidence? An Empirical Study of Quantization for Code Generation | Evaluates GGUF (in llama.cpp / Ollama) alongside AWQ, GPTQ, QuIP#, and AQLM for local code models (Qwen2.5-Coder & CodeLlama) across Python/Java benchmarks. |
+| 4 | [2607.10137](https://arxiv.org/abs/2607.10137) | RDQ: Residual Distribution Quantization for Large Language Models | Fixes residual stream distributional drift in sub-4-bit GGUF PTQ, correcting accumulated layer noise to preserve sub-4-bit model accuracy. |
+| 5 | [2606.12280](https://arxiv.org/abs/2606.12280) | Holding the FP8 Quality Ceiling at 8-Bit Weights and Activations | Applies GGUF INT8 post-training quantization to a 9.3B flow-matching transformer for consumer GPU deployment. |
+
+
 
