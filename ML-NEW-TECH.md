@@ -424,3 +424,19 @@ Online search results on arXiv for Vulkan-based LLM, neural network execution, a
 | 3 | [2605.01352](https://arxiv.org/abs/2605.01352) | VUDA: Breaking CUDA-Vulkan Isolation for Spatial Sharing of Compute and Graphics on the Same GPU | Zero-copy spatial memory sharing between CUDA (AI compute) and Vulkan (rendering) on a single GPU for embodied AI workloads. |
 | 4 | [2605.00219](https://arxiv.org/abs/2605.00219) | VkSplat: High-Performance 3DGS Training in Vulkan Compute | Cross-vendor high-performance compute pipeline in pure Vulkan Compute. |
 
+---
+
+# Part 5 — CPU LLM Execution, Hybrid Offloading & Disk-Streamed MoE
+
+Online search results on arXiv for CPU LLM inference, SIMD kernel co-design, hybrid CPU-GPU offloading, and disk-streamed MoE:
+
+| # | arXiv | Title | Focus & Key Insights |
+|---|-------|-------|----------------------|
+| 1 | [2607.14618](https://arxiv.org/abs/2607.14618) | PolyQ: Codesigning End-to-End Quantization Framework for Scalable Edge CPU LLM Inference | Channel-wise bit allocation ({2,3,4,8,16}-bit) + compile-time channel clustering into bit-homogeneous blocks. Generates SIMD & LUT CPU kernels and merges activation reordering into compile time (reduces reorder traffic by 70.8%). Proportional speedup on workstation, laptop, and mobile CPUs. |
+| 2 | [2607.10183](https://arxiv.org/abs/2607.10183) | ATSInfer: Automated Tensor Scheduling for Hybrid CPU-GPU LLM Inference on Consumer Devices | **Tensor-granularity** (not layer/expert) offload scheduler for hybrid CPU-GPU LLM inference on laptops/desktops when VRAM is tight. Async CPU-GPU coordination delivers 1.94× prefill and 3.29× decode throughput improvement over coarse offload. |
+| 3 | [2608.08910](https://arxiv.org/abs/2608.08910) | Tied Trit-Planes: Persistent Folded Format for Disk-Streamed MoE Serving | 1.6-bit (balanced-ternary 9-level) weight quantization format with a folded byte layout designed specifically for **disk-streamed MoE serving** directly from NVMe/SSD. |
+| 4 | [2607.14622](https://arxiv.org/abs/2607.14622) | ExaGEMM: Exploration Framework for CPU-Driven ML Inference via Associative In-Register Computing for Low-Bit GEMM | CPU-driven framework for low-bit (1/2/4-bit) GEMM using associative in-register computing on conventional CPUs. |
+| 5 | [2607.17415](https://arxiv.org/abs/2607.17415) | Transition-Aware Backend Dispatch for Edge LLM Inference | Dynamic operator dispatch across edge CPU, GPU, and ONNX Runtime CPU backends accounting for shape transitions → 17.4% latency and 14.4% energy cuts on Jetson. |
+| 6 | [2607.12839](https://arxiv.org/abs/2607.12839) | HeteroMosaic: Energy-Efficient Edge LLM Inference | Fine-grained scheduler mapping transformer sub-ops across CPU, iGPU, and NPU on edge SoCs. |
+
+
