@@ -410,3 +410,17 @@ Legend: 🧠 VRAM · 💾 disk/stream · ⚡ CPU · 🌐 network/distributed · 
 | **Parallel low-end cards** | SparseDitto per-GPU kernels (2608.05033), Meganeura cross-vendor runtime (2608.01563), FedSLM SVD-subspace sharding (2607.29071), SpecDrop parameter-free module routing (2608.04084), growing nets (2608.01475) — with the determinism guardrail (2607.28097) |
 
 **The meta-idea:** the batch's strongest reusable insight isn't any single paper — it's that the five goals are all the same problem seen from five sides: **"make the working set smaller than the available memory, and only ever pay for what the current query needs."** Seed-regeneration and RRQ solve *disk size*; anchor-residual and residency-aware paging solve *resident size*; dynamic width, early-stop, and CascadeLUT solve *compute spent*; split learning and FedRings solve *what must travel*; SparseDitto and Meganeura solve *where it can run*.
+
+---
+
+# Part 4 — Vulkan & Cross-Platform GPU ML/LLM Inference
+
+Online search results on arXiv for Vulkan-based LLM, neural network execution, and GPU isolation:
+
+| # | arXiv | Title | Focus & Key Insights |
+|---|-------|-------|----------------------|
+| 1 | [2608.01563](https://arxiv.org/abs/2608.01563) | Meganeura: Portable GPU Training and Inference through Vulkan and Metal | Native compiler + runtime lowering compute graphs to **Vulkan & Metal** across NVIDIA, AMD discrete, AMD APU, Apple Silicon, and Intel iGPU. Outperforms PyTorch native on 12/20 minimal-latency cells in f32. |
+| 2 | [2604.02344](https://arxiv.org/abs/2604.02344) | Characterizing WebGPU Dispatch Overhead for LLM Inference Across Four GPU Vendors | Benchmarks dispatch & validation overhead of cross-platform WebGPU/Vulkan for LLM inference across 4 GPU vendors (NVIDIA, AMD, Intel, Apple). Analyzes small-batch autoregressive LLM decoding bottlenecks in Vulkan/Metal/D3D12. |
+| 3 | [2605.01352](https://arxiv.org/abs/2605.01352) | VUDA: Breaking CUDA-Vulkan Isolation for Spatial Sharing of Compute and Graphics on the Same GPU | Zero-copy spatial memory sharing between CUDA (AI compute) and Vulkan (rendering) on a single GPU for embodied AI workloads. |
+| 4 | [2605.00219](https://arxiv.org/abs/2605.00219) | VkSplat: High-Performance 3DGS Training in Vulkan Compute | Cross-vendor high-performance compute pipeline in pure Vulkan Compute. |
+
