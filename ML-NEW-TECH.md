@@ -468,6 +468,21 @@ Online search results on arXiv for KV-cache offloading, host-to-device prefetchi
 | 5 | [2608.05926](https://arxiv.org/abs/2608.05926) | BALANCE: Hybrid Autoregressive-Speculative LLM Inference in Wireless Edge Networks | Jointly schedules autoregressive decoding and speculative draft verification offloading across edge nodes. |
 | 6 | [2608.06135](https://arxiv.org/abs/2608.06135) | LLM Inference Under Bursty Workload Distribution: Modifying the WAIT Algorithm | Online request-intensity estimation modifying the WAIT scheduling algorithm for bursty LLM traffic. |
 
+---
+
+# Part 8 — Latest System Breakthroughs (Upstream SGLang & vLLM Innovations)
+
+Newly released papers (Aug 8–10 2026):
+
+| # | arXiv | Title | Focus & Key Insights |
+|---|-------|-------|----------------------|
+| 1 | [2608.07009](https://arxiv.org/abs/2608.07009) | HiSparse: Scaling Sparse-Attention Decoding with Hierarchical KV Cache Management | **Merged into upstream SGLang.** Bounds GPU HBM footprint with a small fixed-size GPU cache while keeping full KV history in host RAM. Fused CUDA graph kernels resolve hit detection, LRU replacement, and layer-wise prefetching. Boosts long-context peak throughput by up to **4.7×** on H200/B200/GH200 platforms. |
+| 2 | [2608.08097](https://arxiv.org/abs/2608.08097) | OasisKV: Scaling In-Decode KV Cache Beyond HBM with Lookahead Sparse Prefetching | **Implemented on vLLM.** Uses speculative decoding lookahead tokens to predict future important KV blocks in advance and prefetches them into HBM from host/remote memory during decoding. Delivers **1.69× to 2.1×** throughput gains over dense vLLM with 6.5–9.7× less KV memory footprint. |
+| 3 | [2608.09291](https://arxiv.org/abs/2608.09291) | UnionSparse: An Index-Efficient Sparsity Framework for Low-Bit Sparse LLM Inference on Edge | [Open Source Code](https://github.com/Victor-Alen/UnionSparse). Solves SpMM index bottleneck for W4A4 sparse LLMs on edge GPUs using Index-Efficient Bitmap Encoding & Low-Bit Shared-Memory Parallel Decoding. Outperforms FlashLLM/SpInfer by **1.43–2.30×** and Tensor Cores by **1.56–3.46×**. |
+| 4 | [2608.09888](https://arxiv.org/abs/2608.09888) | BDH-CQ: In-Context Learning with Recurrent Latent Reasoning | 150M-parameter model performing non-verbalized recurrent latent reasoning in high-dimensional state space, cutting inference cost to $0.0007 per task while scoring 29.5% pass@2 on ARC-AGI-1. |
+| 5 | [2608.08340](https://arxiv.org/abs/2608.08340) | OpRAG: A Resource-Deterministic Runtime for GPU-Backed Multi-Stage RAG Workflows | Resource-deterministic execution runtime for multi-stage agentic RAG workflows combining embedding, vector search, and LLM decoding. |
+
+
 
 
 
