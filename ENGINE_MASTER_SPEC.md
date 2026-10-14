@@ -870,6 +870,11 @@ checklist in §8 against it.
 independently verified. Several are v1/v2 preprints. The Aug 2026 digest in your repo (ML-NEW-TECH.md, 992 papers,
 3–7 Aug) is the baseline; this section adds the Sep–Oct arrivals most relevant to this engine.
 
+**Update (14 Oct 2026):** the newest window (Oct 6–14) is digested in `ML-NEW-TECH.md` **Part 9 — Latest LLM Articles**
+(96 papers, 28 sections), which supersedes this layer for §2 Layer 1/3/5/7/8/9 decisions. The codec/transport items there
+— CacheLink (2610.15509), ReadKV (2610.11245), DuoRate (2610.13328), Adaptive DHiSparse (2610.13708) — are direct
+follow-ons to the items below and should be evaluated together.
+
 ### 12.1 MoE hot-expert prediction / caching / eviction / offloading (NEW)
 
 | arXiv | Title | Claim | Where it plugs |
