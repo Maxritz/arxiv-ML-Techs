@@ -23,6 +23,41 @@
 - "Optimal pick" = the single best starting reference for that component today, per the
   evidence in this window.
 
+## Summary Sidebar
+
+| Component | Sub-components | Key Focus | arXiv IDs | When |
+|---|---|---|---|---|
+| **A. Artifact & Storage** | 18 | Codec allocation, VQ codebooks, CAS gap | 18 IDs | 🟢 2026 primary |
+| **B. Lexical Codec** | 5 | Tokenization, token healing | 7 IDs | 🟢/🟠 |
+| **C. Residency & Memory** | 14 | Tiered manager, eviction scoring | 14 IDs | 🟢 2026 |
+| **D. Compiler & Execution** | 12 | Multi-backend IR, kernel gen | 12 IDs | 🟢 2026 |
+| **E. Context Memory** | 15 | Latent summary, span store | 15 IDs | 🟢 2026 |
+| **F. Attention & Positional** | 11 | Positional abstraction, MLA | 11 IDs | 🟢 2026 |
+| **G. Scheduling & Batch** | 10 | P/D disaggregation, lane dispatch | 10 IDs | 🟢 2026 |
+| **H. Decoding Acceleration** | 12 | Self-speculation, MTP heads | 12 IDs | 🟢 2026 |
+| **I. Logit & Output** | 5 | Grammar-constrained decoding | 5 IDs | 🟢/🟠 |
+| **J. Backend & Hardware** | 12 | Platform abstraction, NPUs | 12 IDs | 🟢 2026 |
+| **K. Placement & Distribution** | 11 | Placement solver, multi-card GPU | 11 IDs | 🟢 2026 |
+| **L. Service & API** | 10 | Token routing, cross-model handoff | 10 IDs | 🟢 2026 |
+| **M. Build, Planning & Tuning** | 6 | Cost modeling, auto-tuning | 6 IDs | 🟢 2026 |
+| **N. Observability & Reliability** | 7 | TELLER, determinism, losslessness | 7 IDs | 🟢 2026 |
+| **O. Security & Governance** | 6 | Spec-decoding attacks, context safety | 6 IDs | 🟢 2026 |
+| **P. Extensions** | 5 | Vision, cross-modal handoff | 5 IDs | 🟢 2026 |
+| **Q. Quality & Benchmarking** | 5 | LLM evaluation frameworks, carbon-aware eval | 7 IDs | 🟢/🟠 |
+| **R. Resource & Energy Modeling** | 6 | Energy-proportional inference, carbon budget | 5 IDs | 🟢/⚪ |
+
+**Q. Quality & Benchmarking** — 5 sub-components: LLM evaluation frameworks (Systematic Evaluation 2601.03986, Bench360 2511.16682), inference-time latency evaluation (Human-less LLM Serving 2606.20577, Prompt-Aware Scheduling 2510.03243v3), carbon-aware evaluation (Reference Framework 2603.02949v1), LLM-as-a-Judge evaluation (2026 frameworks), and real-time low-latency serving metrics (Human-less LLM Serving + Stable Token-level Scheduling). 🟢 2026 primary, 🟠 2025 fallback where noted.
+
+## R. Resource & Energy Modeling
+
+| Sub-component | Paper | When | Relevance |
+|---|---|---|---|
+| **Energy-proportional inference** | [Green AI energy study](https://arxiv.org/abs/2610.17531) / [ExaGEMM](https://arxiv.org/abs/2607.14622) · [PolyQ](https://arxiv.org/abs/2607.14618) · [Early-Stop Accumulations](https://arxiv.org/abs/2608.06177) | 🟢 2026 | 10 PTQ × 5 models × 4 GPUs: fused-kernel int8 saves up to 4× energy vs FP32; quantized GEMM peaks at long-input/short-output. |
+| **Carbon budget per-token** | [A Reference Framework for LLM Inference Carbon](https://arxiv.org/abs/2603.02949v1) · [Carbon-SLO tension](https://arxiv.org/abs/2610.14571) | 🟢 2026 | MILP: −60% carbon at ~3% violations; per-token carbon budget tracking; geo-distributed SLO-vs-carbon scheduler ladder. |
+| **Hardware efficiency ratios** | [ExaGEMM autotuning](https://arxiv.org/abs/2607.14622) · [Vendor math libs precision dispatch](https://arxiv.org/abs/2607.14618) · [Early-Stop Accumulations](https://arxiv.org/abs/2608.06177) | 🟢 Jul–Aug 2026 | Exascale GEMM autotuning; multi-precision kernel selection; accumulation early-stopping — the precision-ISA dispatch menu for energy efficiency. |
+| **QoS / latency SLO enforcement** | [Stable Token-level Scheduling](https://arxiv.org/abs/2610.17689) · [Priority / SLA manager](https://arxiv.org/abs/2610.16592) · [Predicted-Latency Based Scheduling](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) | 🟢 2026 | Token-window admission control; oracle-length-knowledge loses to batching/hardware effects; aging-shortest-prompt-first strongest practical baseline. |
+| **Model-size vs latency curves** | *(no single 2026 paper owns this)* | ⚪ | Engineering: derive from benchmark suites (Q) + hardware profiles; no canonical 2026 paper defines the curve. |
+
 ---
 
 ## 0. Pillar-Level Verdicts (map to §1 Design Pillars)
