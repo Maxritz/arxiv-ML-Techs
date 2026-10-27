@@ -58,14 +58,63 @@ available, cross-check each missing component against its stated requirements.
     high-drift layers
   - **Commitment-weighted verifier-side sizing** (AcceptMoE, 2608.02989): conditions on cache residency under
     offloading, auto-sizes expert count per block — directly addresses the disk-streaming/offload goal
-- **Expert cache design** — must support:
-  - Profile-ranked cold start (Strata: profile ranks all 24,576 experts; ~700 experts per extra GiB VRAM)
-  - LRU/LFU/score-based eviction with **correction on miss** (ExpertFlow, 2410.17954 / 2510.26730: up to 91.96%
-    hit ratio, 61.15% better than LRU, up to 93.72% less GPU memory, up to 10× throughput)
-  - Separate VRAM-resident subset + RAM-resident full expert pool + SSD/mapped fallback (Strata three-tier)
-  - **Determinism guardrail:** from-expert-reduction-to-behavioral-divergence (2607.28097) — equivalent
-    aggregation orders produce different outputs; any cross-card or even single-card expert shuffling needs a
-    fixed order + reproducibility test
+- **Expert cache design — two structures, and only one of them is allowed to see the clock.**
+
+  The obvious design — bias the router toward experts that happen to be resident, then prefetch asynchronously —
+  makes the produced logits depend on how fast bytes moved. Gate B (`FRESH_LLM_ENGINE_GAPS.md`) requires
+  **bit-identical logits between paged and resident runs on the same backend**, so a single cache that both
+  steers routing and answers to residency cannot satisfy it. Prefetch-Steered Routing (2610.34721) splits the
+  cache in two; adopt that split as the design, not as an optimization.
+
+  **`L` — the logical cache (deterministic, model-visible).** Per layer, an ordered set of expert ids, advanced
+  once per layer per token by a pure function:
+
+  ```
+  L[t, l+1] = admit( L[t, l], pred_scores(l+1), n )   # pred = predictor stack above, weights+activations only
+  ```
+
+  Admit the top-`n` experts by the predictor's estimate of the next layer's routing, break score ties by lower
+  expert id, evict by the same fixed rule over `L`'s own contents. Nothing else may enter this function: no I/O
+  completion, no hit/miss counter, no prefetch depth, no thread count, no wall clock. The router bias is then a
+  fixed function of `L` occupancy only — `score' = score + beta * 1[e in L]` — so the selected expert set is a
+  function of `(weights, token sequence, n, beta, admit rule)` and nothing else. `n` and `beta` are **model
+  config, not memory config**; they do not change when the cache budget changes. `|L|` may exceed what is
+  physically resident: `L` is a bias target, not a residency claim, and a miss against `L` is a latency event only.
+
+  **`P` — the physical store (timing-dependent, model-invisible).** VRAM hot subset + RAM pinned pool + SSD/mapped
+  fallback (Strata three-tier). Here every heuristic in the literature is fair game and harmless: profile-ranked
+  cold start (Strata ranks all 24,576 experts; ~700/GiB), LRU/LFU/score eviction with **correction on miss**
+  (ExpertFlow, 2410.17954 / 2510.26730: up to 91.96% hit, 61.15% better than LRU, up to 10× throughput), SeqMoE
+  forecast eviction, Mira HOT+STAGE, any lookahead depth, any I/O thread count, AcceptMoE residency-aware sizing.
+  **Each of these may change `P` and its hit rate; none may change `L`.** If a heuristic needs `L` to change, it
+  is a routing change and must be declared as model config and re-gated.
+
+  **Determinism contract — what the gates become**
+
+  1. Same weights + token sequence + `(n, beta, admit rule)` ⇒ same expert set per token, same aggregation order,
+     same logits — on every run, machine, cache budget, residency fraction and thread count.
+  2. Resident mode is the **same code path** with `|P| = all experts`; `L`, `beta` and `n` are untouched. Gate B
+     then compares two runs that differ only in how bytes arrived, so it is bit-identical *by construction*
+     rather than by tolerance — which is what makes the gate meaningful.
+  3. Selected experts are still sorted by expert id before the weighted sum; no float atomics; no accumulation
+     order derived from completion order (From Expert Reduction to Behavioral Divergence, 2607.28097). Cache
+     determinism does not remove the need for this — they are independent requirements.
+  4. Gate A and Gate C (vs llama.cpp) run with `beta = 0`, i.e. exact routing. llama.cpp has neither `L` nor a
+     bias, so a biased comparison would measure the bias instead of the kernels. Ship exact routing as a mode of
+     the same binary: it is simultaneously the oracle path and the quality-reference arm.
+  5. The gate report states `(n, beta, |P|/|E|)` next to every speed and hit number. A hit rate quoted without
+     them is not comparable to anything, including a later build of this engine.
+
+  **What the bias costs, reported rather than assumed.** On OLMoE-1B-7B at 50% and 25% residency, 2.2–2.3× faster
+  than exact routing with LRU and 25–30% faster than the Cache-Prior operating point, at mean benchmark
+  differences of +0.1 and +0.5 points (95% lower bounds −0.8 and −0.3). The advantage over Cache-Prior **reverses
+  on HumanEval at 50% residency**, and on Qwen3.6-35B-A3B (copies cheap relative to compute) the quality edge
+  survives while the speed does not. Distillation-trained gates did not help. So `n` and `beta` are tuned per
+  model and reported per task, and no single operating point is assumed to transfer.
+
+  **Consequence for the rest of §1.2:** the predictor bullets above feed `L`, so their accuracy figures describe
+  logical-cache quality; the physical hit rate is a separate metric and the two must not be quoted as one number.
+
 - **MTP / speculative draft for expert prefetch** — MoE-SpeQ (2511.14102): small on-device draft model predicts
   future expert needs and prefetches while computation proceeds; also doubles as a token drafter
 
@@ -369,10 +418,10 @@ whether the latest papers give a concrete implementation to adopt.
 |---|---|---|
 | Router: token-choice Top-K + shared experts + load balancing | `olmoe_repro.sh` suggests an OLMoE reference; expert cache "kind of" exists | Auxiliary-loss-free balancing (2408.15664 / V3 2412.19437); SoftTopK MaxScore (2508.12801); Elbow-based dynamic top-k (2608.04401); SimBal (2506.14038); Advancing Expert Specialization (2505.22323); Expert-Token Resonance (2406.00023) |
 | Hot-expert predictor (the 98% piece) | **not present** in scanned repo | Pre-Attention Expert Prediction (2511.10676): 93–98% acc; Fate (2502.12224): 97.15% pref acc / 99.08% hit; MoE-Beyond (2508.17137): 97.5% acc / hit 17→72%; LayerScope (2509.23638): >90% Top-4; AcceptMoE (2608.02989) residency-aware sizing; Speculating Experts (2603.19289): predictive execution, ~90% hit beyond 2nd layer; ExpertFlow (2410.17954): 95% acc / 91.96% hit / up to 10× throughput |
-| Expert cache: profile-ranked cold start + eviction-with-correction + VRAM/RAM/SSD tiers | expert cache "kind of" exists | Strata three-tier (VRAM-resident subset + RAM pinned pool + mapped fallback); Strata profile ranks all 24,576 experts, ~700 experts/GiB; ExpertFlow cache-aware routing + runtime correction; AcceptMoE cache-residency conditioning |
+| Expert cache, split per §1.2: deterministic logical cache `L` (router bias target, function of token sequence) + timing-only physical store `P` (VRAM/RAM/SSD tiers) | expert cache "kind of" exists | PSR logical/physical split (2610.34721) — the only form compatible with Gate B; then, all inside `P`: Strata three-tier (VRAM subset + RAM pinned pool + mapped fallback), Strata profile-ranked cold start (24,576 experts, ~700/GiB), ExpertFlow eviction-with-correction, SeqMoE forecast eviction, Mira HOT+STAGE, AcceptMoE residency-aware sizing |
 | Prefetch pipeline: overlap PCIe/CPU with current-layer compute | not visible | Strata: stream next-layer experts over PCIe while current-layer attention runs; helper threads for unpinned copies; STRATA_IO_PREFETCH (8 I/O threads, lookahead 2); Fate/LayerScope/Pre-Attention prefetch; MoE-SpeQ draft predicts future experts (2511.14102) |
 | MTP draft head for tokens + expert lookahead | not visible | Strata MTP: up to 3 tokens, 2.4–3.2 tok/pass, 1.6–1.8×, ~180 MiB VRAM; MoE-SpeQ (2511.14102) |
-| Determinism guardrail for expert aggregation order | **must add** | From Expert Reduction to Behavioral Divergence (2607.28097): fix aggregation order, test per-machine reproducibility before any sharding |
+| Determinism guardrail: routing reads `L` only, never residency; fixed expert aggregation order | **must add** | §1.2 contract rules 1–5; From Expert Reduction to Behavioral Divergence (2607.28097): sort by expert id, no float atomics, test per-machine reproducibility before any sharding |
 
 ### Layer 3 — KV cache + attention + long-context
 | Component | Kraken start? | Adopt from papers |
@@ -466,7 +515,7 @@ lowest tiers.
 | VRAM | Target models / regime | Key engine features active | VRAM budget logic |
 |---|---|---|---|
 | **4–6 GB** | Small dense (1–3 B) or heavily quantized; or **disk-streamed tiny MoE** (expert-pruned, e.g. Strata Coder-style 256/512 experts per layer, ~29.6 GB shard, 23 GB experts) with most experts on SSD, only hot cache in VRAM | MTP optional (small vocab to save ~110 MiB); Pre-Attention predictor + Fate-style adjacent-layer predictor; tiny VRAM expert cache (profile-ranked); KV mostly off-VRAM (OasisKV/HiSparse-style host RAM); mmap expert files; Linux read-ahead + IO prefetch; AVX CPU expert fallback for misses; AdaptiveSD draft control for CPU-constrained decode | KV: host RAM + sparse VRAM; weights: SSD + hot cache; expect slow cold tokens, faster once hot experts cached; safety re-verified per quant tier |
-| **8–10 GB** | Quantized 7–13 B dense (Q4/Q5) OR small MoE (OLMoE 7B/1B-active, or DeepSeek-MoE-scale) with a useful VRAM expert cache + RAM resident pool | Paged KV + radix prefix; chunked prefill + continuous batching; AnchorKV/INT2 KV compression for long context; hot-expert predictor (Pre-Attention 93–98% or Fate 97% → 99% hit); ExpertFlow cache-aware routing; MTP if VRAM allows; PCIe prefetch of next-layer experts; ATSInfer tensor-granularity offload to CPU for overflow | VRAM holds model weights (quantized) + KV (compressed) + hot expert cache; RAM holds full expert pool (pinned) + OS; SSD holds cold experts + n-gram/PLE table if present |
+| **8–10 GB** | Quantized 7–13 B dense (Q4/Q5) OR small MoE (OLMoE 7B/1B-active, or DeepSeek-MoE-scale) with a useful VRAM expert cache + RAM resident pool | Paged KV + radix prefix; chunked prefill + continuous batching; AnchorKV/INT2 KV compression for long context; hot-expert predictor (Pre-Attention 93–98% or Fate 97% → 99% hit) feeding the logical cache; ExpertFlow eviction-with-correction inside the physical store (§1.2); MTP if VRAM allows; PCIe prefetch of next-layer experts; ATSInfer tensor-granularity offload to CPU for overflow | VRAM holds model weights (quantized) + KV (compressed) + hot expert cache; RAM holds full expert pool (pinned) + OS; SSD holds cold experts + n-gram/PLE table if present |
 | **12–16 GB** | 13–30 B dense (Q4/FP8) OR mid MoE (DeepSeek-V2/V3-scale active subset, Qwen3.8-Flash-Next-style) with a large VRAM expert cache; MTP on | Full Strata-style three-tier: VRAM hot cache (profile-ranked, ~700 experts/GiB) + RAM pinned expert pool + mapped-SSD fallback; MTP draft head (~180 MiB or ~70 MiB small vocab); KV streaming at 64K+ (`--kv-resident`); HiSparse/OasisKV KV offload; Pre-Attention + LayerScope cross-layer prefetch; AcceptMoE residency-aware sizing; speculative decoding optional | This is the "Strata-lite" sweet spot: enough VRAM for a meaningful hot cache, enough RAM for the full expert pool, SSD for the rest; 1.6–1.8× from MTP, 1.94× prefill / 3.29× decode from ATSInfer offload when VRAM tight |
 | **≥16 GB** (24/32/48/64/96+) | Near-full MoE (DeepSeek-V3-scale, Qwen3.8-Flash-Next full 24,576 experts) with large VRAM cache + RAM pool; MTP + speculative decoding + tree speculation for hybrid attention | Everything above + larger hot cache; KV stays more in VRAM; prefetch depth larger; can run MTP broad-vocab (~180 MiB); can run speculative draft model; can serve multiple concurrent requests with paged+radix+continuous batching + Cascade SLO scheduler | RAM 64 GB+ recommended for full expert pool (Strata recommends 64 GB for full sizes; Coder pruned runs 32 GB); SSD for n-gram/PLE (28.8 GB) + cold experts; NVMe read-ahead critical |
 
@@ -509,8 +558,11 @@ loaded to ~98% or more accuracy.* The literature says this is achievable but the
 
 ### Recommended composition to hit ~98% effective hit rate
 1. **Cold start:** profile-ranked expert order (Strata: profile ranks all experts; ~700/GiB VRAM). Precompute the
-   profile once per model/quant/context-distribution; ship it with the model.
-2. **Predictor stack (layered, not single):**
+   profile once per model/quant/context-distribution; ship it with the model. This orders *loading* only — it
+   seeds `P`, never `L`, so it cannot change which experts a token selects.
+2. **Predictor stack (layered, not single)** — these produce `L`'s admission scores, so their accuracy is a
+   *logical-cache* property; the hit figures below were reported against single-cache designs and are quoted as
+   such:
    - **Same-layer pre-attention predictor** (2511.10676) as the primary: predicts current-layer routing from
      pre-attention activation, avoids the early-layer bootstrap problem; ~93–98% accuracy depending on model
    - **Adjacent-layer gate predictor** (Fate, 2502.12224) as a cross-layer prefetch hint for the *next* layer's
@@ -518,16 +570,21 @@ loaded to ~98% or more accuracy.* The literature says this is achievable but the
    - **Layer-group-aware predictor** (LayerScope/PreScope, 2509.23638) when multi-batch: >90% Top-4, 141% throughput
    - **Predictive execution** (Speculating Experts, 2603.19289) for high-confidence cases: prefetch *and execute*
      speculative experts, not just cache hints; ~90% hit beyond 2nd layer
-3. **Cache policy:** score-based + LRU/LFU with **runtime correction on miss** (ExpertFlow, 2410.17954) — up to
-   91.96% hit, 61.15% better than LRU. Don't use plain LRU.
+3. **Cache policy — two policies, not one** (§1.2). `L` (logical, deterministic) carries the routing bias and is
+   fixed by model config; `P` (physical) carries every eviction/prefetch heuristic and may use
+   LRU/LFU-with-correction-on-miss (ExpertFlow, 2410.17954: up to 91.96% hit, 61.15% better than LRU) freely,
+   because it cannot change logits. Biasing the router toward *resident* experts directly is the version that
+   breaks Gate B (2610.34721).
 4. **Residency-aware sizing** (AcceptMoE, 2608.02989): auto-size expert count per block, condition on what's
-   resident under offloading — directly minimizes SSD/prefetch traffic.
+   resident under offloading — directly minimizes SSD/prefetch traffic. Physical side only: it sets prefetch
+   depth and `P`'s admission, not the selected expert set.
 5. **MTP-driven future-expert prefetch** (MoE-SpeQ, 2511.14102): the draft head predicts future expert needs while
    computation proceeds — overlaps prefetch with compute.
 6. **I/O prefetch** (Strata STRATA_IO_PREFETCH): 8 I/O threads, lookahead 2, warm page cache for current-layer
    uncached experts + router-predicted future-layer experts.
-7. **Determinism guardrail** (2607.28097): fix expert aggregation order; test per-machine reproducibility; otherwise
-   "98% hit" means nothing if outputs diverge between runs/machines.
+7. **Determinism guardrail** (§1.2 contract): routing reads `L` only; aggregation order fixed by expert id; test
+   per-machine and per-cache-budget reproducibility (2607.28097); otherwise "98% hit" means nothing if outputs
+   diverge between runs/machines.
 
 ### Caveats to state in the spec
 - **Early layers are harder** to predict (Speculating Experts, Fate, Pre-Attention all note this) — expect lower hit
@@ -538,6 +595,11 @@ loaded to ~98% or more accuracy.* The literature says this is achievable but the
 - **"98% accuracy" ≠ "98% hit"** — accuracy is prediction correctness; hit rate is whether the right expert is
   resident. A prediction can be correct but still miss under a small cache; a cache can hit because the expert was
   already resident. Document which you're claiming.
+- **A hit rate is now two numbers** — logical admission (does `L` contain the experts the router will pick, at
+  capacity `n`) and physical residency (`|P|/|E|`, what the store actually served). Report both with `(n, beta)`;
+  a single blended "98% hit" hides whether the predictor or the budget was the bottleneck.
+- **Gate A / Gate C must run unbiased** (`beta = 0`, §1.2 rule 4) — otherwise the comparison against llama.cpp
+  measures the routing bias instead of kernel correctness.
 - **MoE + speculative decoding interaction** (Cascade, 2506.20675): verifying multiple speculative tokens can
   activate *more* experts and raise data-movement cost — speculation can hurt the very expert-traffic goal; gate
   speculation on expert-traffic budget.
@@ -583,7 +645,8 @@ loaded to ~98% or more accuracy.* The literature says this is achievable but the
 
 ### Improve beyond Strata (using 2026 papers)
 - **Replace plain LRU with eviction-with-correction** (ExpertFlow, 2410.17954) — Strata's cache is adaptive but
-  the literature shows correction-on-miss + predictive cache beats LRU by up to 61.15%
+  the literature shows correction-on-miss + predictive cache beats LRU by up to 61.15% — and split the cache first
+  (§1.2): correction-on-miss belongs in `P`, or it re-introduces the timing dependence Gate B forbids
 - **Add a same-layer pre-attention predictor** (2511.10676) to Strata's adjacency-based prefetch — ~15 pp accuracy
   gain; reduces the early-layer bootstrap problem
 - **Add layer-group-aware cross-layer scheduling** (LayerScope, 2509.23638) for multi-batch — 141% throughput,
@@ -591,7 +654,7 @@ loaded to ~98% or more accuracy.* The literature says this is achievable but the
 - **Add predictive execution** (Speculating Experts, 2603.19289) — execute speculative experts, not just prefetch;
   ~90% hit beyond 2nd layer
 - **Add AcceptMoE residency-aware sizing** (2608.02989) — auto-size expert count per block, condition on residency
-  under offloading
+  under offloading (physical side only, §1.2: it changes prefetch depth, never the selected expert set)
 - **Add KV compression** (AnchorKV 20×, INT2 OptR, KV VQ, SAKI, QEvict, RestoreKV) + KV offload (OasisKV,
   HiSparse, DualDecoder) — Strata streams KV from RAM but doesn't compress it; compression + offload lets a small
   VRAM hold more experts
@@ -670,8 +733,9 @@ If the spec file were here, these are the items to verify it addresses. From the
    Vino/Metal/WebGPU) — not in scanned repo as a clean layer
 2. **Hot-expert predictor** (pre-attention same-layer + adjacent-layer + layer-group-aware + predictive execution) —
    not present; this is the 98% goal's core
-3. **Expert cache with eviction-with-correction** (not plain LRU) + profile-ranked cold start + VRAM/RAM/SSD tiers —
-   "kind of" exists; needs the literature upgrade
+3. **Expert cache split into logical `L` + physical `P`** (§1.2) — a single cache steering routing *and* answering
+   to residency cannot pass Gate B; with `L` in place, `P` takes eviction-with-correction + profile-ranked cold
+   start + VRAM/RAM/SSD tiers — "kind of" exists; needs the two-structure rewrite, then the literature upgrade
 4. **Prefetch pipeline** (PCIe overlap, IO prefetch, MTP-driven future-expert prefetch) — not visible
 5. **AcceptMoE-style residency-aware expert sizing** — not present
 6. **Determinism guardrail** for expert aggregation order (2607.28097) — must add
@@ -726,7 +790,10 @@ Order so each step delivers a runnable, measurable artifact before the next adds
 **Phase 2 — MoE routing + expert cache (deliverable: run a small MoE, hot experts cached, disk-streamed cold experts)**
 - Router: token-choice Top-K + shared experts + auxiliary-loss-free balancing (or SoftTopK/Elbow); shared experts always
   resident
-- Expert cache: profile-ranked cold start + score-based + LRU/LFU-with-correction (ExpertFlow) + VRAM/RAM/SSD tiers
+- Expert cache in two parts, `L` first: deterministic logical cache (admission by predicted next-layer routing,
+  tie-break by expert id, capacity `n` and bias `beta` fixed as model config) → then physical store `P` with
+  profile-ranked cold start + score/LRU-LFU-with-correction (ExpertFlow) + VRAM/RAM/SSD tiers. **Gate B runs at the
+  `L`-complete milestone**, before any eviction heuristic is tuned
 - Hot-expert predictor stack: pre-attention same-layer (2511.10676) primary + adjacent-layer (Fate) prefetch hint +
   layer-group-aware (LayerScope) for multi-batch + predictive execution (Speculating Experts) for high-confidence
 - Prefetch pipeline: PCIe overlap next-layer experts while current-layer attention runs; helper threads for unpinned
@@ -736,7 +803,8 @@ Order so each step delivers a runnable, measurable artifact before the next adds
   mapped modes; CPU expert fallback (AVX-512/2/VNNI + ggml i-quant) for misses
 - **Determinism guardrail** (2607.28097): fix aggregation order, test per-machine reproducibility
 - **Gate:** OLMoE-scale (or DeepSeek-MoE-scale) runs on 8–16 GB VRAM with hot experts cached and cold experts on SSD;
-  measured cache hit rate documented (claim X% hit, Y% prediction accuracy, define which); outputs reproducible across
+  logical admission and physical hit rate reported separately with `(n, beta, |P|/|E|)` (claim X% hit, Y% prediction
+  accuracy, define which); Gate B bit-identical between `|P|`=all and the default budget; outputs reproducible across
   runs and across CUDA/ROCm within tolerance
 
 **Phase 3 — Speculation + hybrid attention + quant ladder (deliverable: faster decode, lower VRAM, more backends)**
@@ -874,6 +942,15 @@ independently verified. Several are v1/v2 preprints. The Aug 2026 digest in your
 (96 papers, 28 sections), which supersedes this layer for §2 Layer 1/3/5/7/8/9 decisions. The codec/transport items there
 — CacheLink (2610.15509), ReadKV (2610.11245), DuoRate (2610.13328), Adaptive DHiSparse (2610.13708) — are direct
 follow-ons to the items below and should be evaluated together.
+
+**Update (27 Oct 2026):** `ML-NEW-TECH.md` **Part 10 — Latest LLM Articles & Method Detail** (Oct 15–27) supersedes
+both layers for the expert-cache path. Four results change decisions here: **Prefetch-Steered Routing** (2610.34721)
+shows cache-aware routing plus async prefetch makes outputs depend on transfer timing, and fixes it by routing against a
+*deterministic logical cache* — adopted in §1.2 and §2 Layer 2 — routing reads the logical cache only; **COPE**
+(2610.33404) selects offload policy by emulation before implementation; **Adaptive Expert Assignment** (2610.23006) is
+the CPU/GPU split-execution blueprint (+51.9% prefill, +39.5% decode); and **Meta Expert** (2610.27598), **GS-MoE**
+(2610.32009) and **SPARE** (2610.29662) cut bytes-per-token off disk at equal quality, which is the real constraint on
+§2 Layer 2.
 
 ### 12.1 MoE hot-expert prediction / caching / eviction / offloading (NEW)
 
@@ -1137,11 +1214,11 @@ early-exit 2608.01285 · PRECOG 2608.02560 · Lightweight chunk selection for mo
 - Low-RAM modes (mapped expert files, resident-only-not-on-GPU experts, 4 GB headroom, fallback to mapped reads) — adopt logic, improve prefetch/eviction to reduce "small GPU → many SSD reads" slow case
 
 ### Improve beyond Strata (Aug 2026 papers, unchanged)
-- Replace plain LRU with eviction-with-correction (ExpertFlow 2410.17954) — up to 61.15% better than LRU
+- Replace plain LRU with eviction-with-correction (ExpertFlow 2410.17954) — up to 61.15% better than LRU; applies inside `P` after the §1.2 logical/physical split
 - Add same-layer pre-attention predictor (2511.10676) — ~15 pp accuracy gain, reduces early-layer bootstrap
 - Add layer-group-aware cross-layer scheduling (LayerScope 2509.23638) for multi-batch — 141% throughput, 74.6% lower decode latency
 - Add predictive execution (Speculating Experts 2603.19289) — execute speculative experts, not just prefetch; ~90% hit beyond 2nd layer
-- Add AcceptMoE residency-aware sizing (2608.02989) — auto-size expert count per block, condition on residency
+- Add AcceptMoE residency-aware sizing (2608.02989) — auto-size expert count per block, condition on residency; physical side only (§1.2)
 - Add KV compression (AnchorKV 20×, INT2 OptR, KV VQ, SAKI, QEvict, RestoreKV) + KV offload (OasisKV, HiSparse, DualDecoder)
 - Add speculative decoding beyond MTP (HiSpec, PARD-2, Approximate SD, AdaptiveSD for CPU) — gated on expert-traffic budget (Cascade caveat)
 - Add treed speculation for hybrid attention (Bole 2608.01651) if targeting hybrid Gated DeltaNet + sparse attention
@@ -1170,7 +1247,7 @@ If the spec file were here, verify it addresses these. From the goal statement +
 
 1. **Backend abstraction + per-vendor kernel registry** with feature detection + graceful fallback (CUDA/ROCm/Vulkan/Vino/Metal/WebGPU) + evaluate RLX (2609.37916) as a potential unified Rust IR/runtime — not in scanned repo as a clean layer
 2. **Hot-expert predictor** (pre-attention same-layer + adjacent-layer + layer-group-aware + predictive execution) — not present; this is the 98% goal's core; Sep–Oct adds SeqMoE forecast-driven eviction (2609.12978), Mira HOT+STAGE (2609.38090), Cache-Aware Router Adaptation (2609.04895), SpecPrefetch (2607.24787)
-3. **Expert cache with eviction-with-correction** (not plain LRU) + profile-ranked cold start + VRAM/RAM/SSD tiers — "kind of" exists; needs literature upgrade; Sep–Oct adds ExpertFlow correction, SeqMoE forecast eviction, Mira HOT+STAGE, TempoKV timing-aware staging, When Fancy Eviction Fails LRU-baseline caution (2609.28870)
+3. **Expert cache split into deterministic logical `L` + timing-only physical `P`** (§1.2, PSR 2610.34721) — a single cache steering routing *and* answering to residency cannot pass Gate B — plus eviction-with-correction (not plain LRU) + profile-ranked cold start + VRAM/RAM/SSD tiers inside `P` — "kind of" exists; needs literature upgrade; Sep–Oct adds ExpertFlow correction, SeqMoE forecast eviction, Mira HOT+STAGE, TempoKV timing-aware staging, When Fancy Eviction Fails LRU-baseline caution (2609.28870)
 4. **Prefetch pipeline** (PCIe overlap, IO prefetch, MTP-driven future-expert prefetch) — not visible; Sep–Oct adds SpecPrefetch adapter prioritization, SeqMoE deadline-aware prefetch scheduling, Mira 2-layer-lookahead prefetch
 5. **AcceptMoE-style residency-aware expert sizing** — not present; Sep–Oct reinforcement: SeqMoE, Mira, AcceptMoE still the reference
 6. **Determinism guardrail** for expert aggregation order (2607.28097) — must add; Sep–Oct reinforces (more aggressive prefetch/eviction/routing-prediction makes reproducibility more important); add losslessness-under-finite-precision audit (2609.15504) for any speculative path
@@ -1231,7 +1308,9 @@ called out inline.
 
 **Phase 2 — MoE routing + expert cache (deliverable: run a small MoE, hot experts cached, disk-streamed cold experts)**
 - Router: token-choice Top-K + shared experts + auxiliary-loss-free balancing (or SoftTopK/Elbow); shared experts always resident
-- Expert cache: profile-ranked cold start + score-based + LRU/LFU-with-correction (ExpertFlow 2410.17954) + VRAM/RAM/SSD tiers;
+- Expert cache in two parts, `L` first: deterministic logical cache (admission by predicted next-layer routing, tie-break
+  by expert id, capacity `n` and bias `beta` fixed as model config) → then physical store `P` with profile-ranked cold start
+  + score/LRU-LFU-with-correction (ExpertFlow 2410.17954) + VRAM/RAM/SSD tiers; **Gate B runs at the `L`-complete milestone**;
   **add SeqMoE forecast-driven eviction (2609.12978, 96.97% hit at 45% residency) as the eviction upgrade**; **add Mira HOT+STAGE
   cache + 2-layer-lookahead + telemetry rebalance (2609.38090) as a clean 2-tier cache variant**; consider Cache-Aware Router
   Adaptation (2609.04895) to change residency at post-training time (pair with, don't replace, runtime predictors)
@@ -1248,8 +1327,9 @@ called out inline.
 - **Determinism guardrail** (2607.28097): fix aggregation order, test per-machine reproducibility; **add losslessness-under-finite-
   precision audit (2609.15504) for any speculative path**
 - **Gate:** OLMoE-scale (or DeepSeek-MoE-scale) runs on 8–16 GB VRAM with hot experts cached and cold experts on SSD; measured
-  cache hit rate documented (claim X% hit, Y% prediction accuracy, define which; SeqMoE-style 96.97% at 45% residency is the
-  benchmark to aim for); outputs reproducible across runs and across CUDA/ROCm within tolerance
+  cache hit rate documented as two numbers — logical admission and physical residency at `(n, beta, |P|/|E|)` (claim X% hit,
+  Y% prediction accuracy, define which; SeqMoE-style 96.97% at 45% residency is the benchmark to aim for); Gate B bit-identical
+  between `|P|`=all and the default budget at the same `(n, beta)`; outputs reproducible across runs and across CUDA/ROCm within tolerance
 
 **Phase 3 — Speculation + hybrid attention + quant ladder (deliverable: faster decode, lower VRAM, more backends)**
 - MTP draft head (optional, VRAM-budgeted: ~180 MiB broad / ~70 MiB small vocab; ~6 GB draft files); 1.6–1.8× target
