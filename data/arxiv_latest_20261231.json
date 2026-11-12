@@ -1,0 +1,1155 @@
+[
+ {
+  "id": "2610.38095",
+  "title": "Nemotron 3.5 Super and Lightning: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Models for Agentic AI",
+  "abstract": "We introduce Nemotron 3.5 Super and Nemotron 3.5 Lightning, open and efficient Mixture-of-Experts Hybrid Mamba-Transformer models designed for reasoning, long-context understanding, and agentic workloads. Super is a 120B-parameter, 12B-active multimodal model, while Lightning is a smaller 30B-parameter, 3B-active text model; both designed for efficient deployment. Both models combine large-scale distillation, long-context training, and native speculative decoding, while Super further incorporates Indic continued pretraining and agentic software-engineering mid-training. We develop a comprehensive post-training pipeline spanning supervised fine-tuning and reinforcement learning (RLVR and RLHF), complemented in Super by specialized teacher training and multi- teacher on-policy distillation (MOPD). This transforms Super from a text-only base model into a multimodal agent capable of reasoning over text, images, video, and interactive tool environments. We further explore test-time scaling through parallel agent execution and self-verification. Across training and deployment, we jointly optimize capability and efficiency. Indic continued pretraining improves Indian-language benchmarks by up to 9.82 percentage points, while agentic mid-training strengthens software-engineering capabilities and robustness across agent harnesses. The post-trained Super model achieves 51.78% on SWE-bench Pro, surpassing Nemotron 3 Ultra despite using approximately 4.6x fewer active parameters. Post-training MTP boosting improves speculative- decoding acceptance length by up to 21.8% under probabilistic draft sampling, while NVFP4 quantization achieves 99.62% median accuracy recovery relative to BF16. Inference optimizations enable up to 4,856 output tokens/s/GPU on GB200 while sustaining at least 50 tokens/s/user.",
+  "published": "2026-10-28",
+  "updated": "2026-10-28",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 115
+ },
+ {
+  "id": "2611.05304",
+  "title": "LoopVQ: Sub 1-bit KV Cache Quantization for Looped Transformers",
+  "abstract": "Looped transformers are a parameter-efficient alternative to standard transformers for language modeling. By reapplying the same layers across multiple loop steps, recent looped language models match the performance of non-looped models several times their size. While this architecture effectively reduces parameter memory, each loop step still stores its own keys and values, so the key-value (KV) cache grows linearly with the number of loop steps and becomes the main memory bottleneck. We observe that the KV cache of looped models is highly redundant along the loop axis and that the loop steps differ substantially in their sensitivity to quantization. Based on these observations, we propose $\\textbf{LoopVQ}$, a KV cache vector quantization method for looped transformers that codes channels of multiple loop steps jointly, and fine-tunes the codebooks to match the output of the full-precision model. At 0.5 bits per element, LoopVQ outperforms existing KV cache vector quantization methods for standard LLMs on general, long chain-of-thought reasoning, and long-context retrieval tasks with Ouro and Huginn models. Its design is orthogonal to these methods, and combined with TaSQ, it retains much of the BF16 accuracy even at 0.25 bits per element. We also implement LoopVQ in SGLang, where it nearly halves the decode latency at a 32K-token context and raises the peak serving throughput by up to $4.3\\times$ and $6.1\\times$ on the 1.4B and 2.6B Ouro models compared to the BF16 baseline.",
+  "published": "2026-11-03",
+  "updated": "2026-11-03",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 111
+ },
+ {
+  "id": "2611.13293",
+  "title": "Decode Token Parallelism: Memory-Efficient Distributed Attention Parallelism for Scalable LLM Decoding",
+  "abstract": "Serving large language models at high concurrency with long contexts requires KV-cache capacity and attention bandwidth that grow with the decode pool. Existing parallelization strategies trade one against the other: data parallelism replicates model weights, limiting KV capacity; tensor parallelism stops scaling attention at the model's KV-head count and pushes dense collectives across nodes; and decode context parallelism (DCP) recovers capacity by sharding the sequence but adds cross-node aggregation of partial attention results. We observe that during decode, dense layers and attention scale differently: dense layers amortize weight reads across the batch and run efficiently within a single NVLink domain, whereas attention cost grows with every active request's KV cache. We present Decode Token Parallelism (TKNP), a decode-pool architecture that decouples weight placement from attention ownership. TKNP distributes a single model copy across nodes in balanced layer blocks. The active node holding a block executes its projections and MLP for the full batch using intra-node tensor parallelism, while every node computes attention for its own requests against locally resident KV cache. This extends request-local attention across nodes without replicating weights: only current-token activations cross the network, dense all-reduces remain within NVLink, and attention requires no cross-node merging of partial results. Implemented in vLLM and evaluated on Llama 3.1 405B and Nemotron-4 340B on up to 64 H100 GPUs, TKNP improves completion throughput for long-context, high-concurrency workloads by up to 1.7$\\times$ over DCP and by up to 2.06$\\times$ over data parallelism at matched GPU count.",
+  "published": "2026-11-09",
+  "updated": "2026-11-09",
+  "categories": [
+   "cs.DC",
+   "cs.CL",
+   "cs.LG",
+   "cs.DC"
+  ],
+  "score": 107
+ },
+ {
+  "id": "2611.04137",
+  "title": "LoopKV: Loop-Aware KV Cache Compression for Serving Looped Transformers",
+  "abstract": "Looped transformers apply a shared block several times per token to improve accuracy without adding parameters. For models such as Ouro that keep a separate key-value (KV) cache per loop, cache memory limits the batch size that amortizes repeated weight reads. Uniform-bit quantization and fixed rules per loop do not allocate precision according to each layer's sensitivity in each loop. Measurements on Ouro show that quantization sensitivity varies across (loop, layer) cells, and the sum of individual cell damages approximates the overall output damage. Sharing damage also varies by cell, with later loops generally tolerating sharing better. Skipping low-attention values to save reads produces errors that compound across loops. LoopKV uses a one-time offline profile to choose 4-bit storage, 2-bit storage or reuse of the final loop's KV for each cell. The planner minimizes reads under budgets for predicted damage and storage. During decoding, each loop reads the high 2 bits of each 4-bit value and fetches the low bits only where its own attention weights require 4-bit precision. A single fused kernel in vLLM executes the plan. Serving Ouro-1.4B on one RTX PRO 6000, the memory-optimized LoopKV-M plan stores 35% less KV than uniform 4-bit quantization (KIVI-4) on the same fused kernel and CUDA graph. It sustains 1.7-2.2x KIVI-4's goodput under a latency service-level objective with a 16K-token maximum length. None of its averages on six public benchmarks falls significantly below BF16's.",
+  "published": "2026-11-03",
+  "updated": "2026-11-03",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.DC",
+   "cs.LG"
+  ],
+  "score": 103
+ },
+ {
+  "id": "2610.33371",
+  "title": "How Does Post-Training Shape LLM Value Preferences?",
+  "abstract": "During post-training, large language models (LLMs) learn value preferences from corpora that may contain imbalanced proportions of opinions associated with different demographic groups. Amplifying these imbalances may further underrepresent some groups' opinions. However, how opinion mixtures shape value preferences across post-training paths remains unclear. To answer this question, we conduct controlled experiments using post-training corpora with different opinion mixtures and five post-training paths based on SFT, DPO, and GRPO. We find that post-training amplifies opinion imbalances differently across post-training paths. Once value preferences are amplified, whether further post-training can remove them depends on both the post-training method and the opinion mixture in the corpus. More concerningly, a model's stability under interventions depends on whether further post-training changes its value preference. Moreover, these value preferences are transferred to student models even when distillation uses corpora with no explicit opinion questions. These findings suggest that both the opinion mixture in post-training corpora and the choice of post-training method should be considered when developing, evaluating, and reusing LLMs. Our code and data are available at https://github.com/ku-nlp/llm-value-preferences.",
+  "published": "2026-10-23",
+  "updated": "2026-10-23",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 95
+ },
+ {
+  "id": "2611.10634",
+  "title": "Coverage-Verified Sparse Attention: Closed-Loop Quality Control for Long-Context LLM Decoding",
+  "abstract": "Sparse attention accelerates long-context decoding by reading a subset of the KV cache, but existing methods are open-loop: the kernel commits to its selection with no signal indicating whether enough attention mass was preserved and no recovery path when it was not. The needed signal already exists inside the kernel. The fraction of softmax mass on the selected tokens, which we call coverage, satisfies an exact algebraic equality with per-step output error and serves a dual role as the acceptance criterion and the interpolation weight for recovery. Coverage-Verified Sparse Attention (CVSA) turns coverage into a training-free, closed-loop verify-then-correct decode loop that accepts high-coverage drafts and recovers only the heads that fall short, with no sampling, no draft model, and no speculative-decoding infrastructure. Quality varies by only $0.14$ points across the threshold sweep; budget and scheduling ablations characterize the deployed operating point. On LongBench at 7B and 70B, CVSA comes within $1.13$ points of dense attention, statistically matching it at 70B, and it loses $0.8$ points on RULER; measured median decode-step speedup reaches $6.21\\times$ at 128K context.",
+  "published": "2026-11-07",
+  "updated": "2026-11-07",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 95
+ },
+ {
+  "id": "2611.11761",
+  "title": "BridgeKV: Large-Model Prefill and Small-Model Decoding for LLM Inference via KV Cache Translation",
+  "abstract": "LLM inference has two phases with different bottlenecks: LLM prefill runs once per request and is compute-intensive. Decoding repeats for every output token and is limited by memory bandwidth. To address the challenges associated with this issue, different solutions have been proposed. All of these solutions use the same model for both prefill and decode phases. We propose BridgeKV, which uses a larger model for prefill and a smaller model of the same family for decoding. A lightweight KV-stitching module translates the larger model's prompt cache into the smaller model's cache layout. It handles differences in cache shape and representation through learned local layer mixing and separate nonlinear maps for keys and values. With both models frozen, we train the module to align their caches and make the smaller model follow the larger model's next-token predictions. A second training stage adds low-rank adapters when further task adaptation is needed. Across six model pairs and five datasets, BridgeKV outperforms fine-tuned small-model baselines with matched trainable parameter budgets in all 30 settings. It closes up to 80% of the quality gap to using the larger model for both phases. On one A40 GPU, Llama-3.1-Instruct-8B to Llama-3.2-Instruct-1B achieves 3.0X faster requests than the larger model alone, with latency close to the smaller model alone. BridgeKV can improve the hardware and system solutions that separate prefill and decode phases across GPUs. A separate serving simulation models request arrivals, queues, and cache transfer. For Llama-3.1-Instruct-70B to Llama-3.2-Instruct-1B, it predicts up to 33.86X faster requests and 27.5X lower energy use than using the larger model for both prefill and decode phases.",
+  "published": "2026-11-09",
+  "updated": "2026-11-09",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 95
+ },
+ {
+  "id": "2610.41291",
+  "title": "In-Model Context Compression with Agentic Soft Tokens for Long-Horizon LLM Agents",
+  "abstract": "Long-horizon LLM agents play an important role in solving complex and sustained tasks, with ever-growing interaction contexts. However, these accumulated contexts will raise substantial computational cost and obscure key decision-relevant evidence. Existing methods typically train external compressors or context-management agents to rewrite context as shorter hard-token sequences, but such external selection may not align with the LLM's evolving representation and is necessarily lossy. In this paper, we introduce Agentic Soft-Token Compression (ASTC), a training-free compression method using soft tokens within LLM agent for long-horizon tasks. Specifically, ASTC uses the model's native recurrent dynamics to determine the already absorbed information, leveraging the commonly-used hybrid Gated Delta Network (GDN)-attention. It then carries this information forward as agentic soft tokens while retaining exact values as hard tokens. The resulting compact sequence reduces later-layer computation and yields reusable KV caches, extending the savings across the agent's trajectory. Extensive experiments on long-horizon tasks show that ASTC matches or exceeds the uncompressed agent's accuracy with up to 50.68% fewer end-to-end Attention Pairs, while trained compressors require 15.4 to 103.7 times more Attention Pairs per successful task. These findings highlight agentic soft tokens as a model-native way to carry absorbed context forward as the task representation evolves.",
+  "published": "2026-10-30",
+  "updated": "2026-10-30",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.LG",
+   "cs.NE",
+   "cs.CL"
+  ],
+  "score": 94
+ },
+ {
+  "id": "2611.03577",
+  "title": "Sonar-MoE: In-Backward Expert Updates for Memory-Efficient Mixture-of-Experts Training",
+  "abstract": "Most parameters of a Mixture-of-Experts (MoE) model belong to its experts, and standard training keeps every expert gradient in GPU memory until the optimizer step. This memory grows with the number and size of the experts, so it rises as MoE models scale. We introduce Sonar-MoE, which updates each expert tensor during the backward pass and frees its gradient right away. It brings optimizer-in-backward from dense models to batched MoE expert tensors, so the GPU never holds more than one layer of expert gradients. When we fine-tune OLMoE-1B-7B and Granite-3.1-3B-A800M in bf16 with two expert-kernel backends, Sonar-MoE lowers peak memory by 19% to 22%. Its updates are bitwise identical to standard training without expert gradient clipping, and held-out loss stays within 0.003 of all baselines. Each step also takes 17% to 23% less time than standard training with global-norm clipping. Updating whole batched tensors rather than individual experts is what keeps Sonar-MoE fast, as it avoids a 20% to 72% slowdown while using the same memory. Sonar-MoE matches optimizer-in-backward over all parameters in memory and speed while still clipping the dense parameters.",
+  "published": "2026-11-02",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.PF",
+   "cs.LG"
+  ],
+  "score": 94
+ },
+ {
+  "id": "2611.03899",
+  "title": "EpiLoRA: Fusing Many LoRA Adapters into Low-Precision GEMMs for Serving and RL",
+  "abstract": "Low-rank adapters (LoRA) let one base model serve many fine-tuned variants: multi-tenant engines keep a single copy of the base and batch the requests of many tenants, each with its own adapter. As base models move to 8-bit (FP8) and 4-bit formats, their general matrix multiplications (GEMMs) become cheaper, but the adapters do not: engines run them as separate small GPU kernels beside the GEMM, whose latency takes a growing share of every decoding step. An adapter projects its input down to a low rank and back up, and our key observation is that the GEMM needs the down-projection only in its epilogue, the final stage in which it writes its output. EpiLoRA, a plugin for the vLLM engine, therefore launches the down-projection first and the low-precision GEMM as a dependent kernel that streams its weights meanwhile and adds every tenant's up-projection in its epilogue. On NVIDIA Hopper GPUs, EpiLoRA decodes for a single adapter with up to 24% lower time per token than vLLM's fastest configuration, and faster than SGLang and TensorRT-LLM; with many tenants, its adapter kernels deliver more throughput than vLLM's on most GPU-model pairs we tested. The same low-precision base also trains: a LoRA reinforcement-learning trainer that computes on the engine's FP8 weights needs no 16-bit copy, so a 27B model trains on one 48 GB GPU, and an engine that then keeps activations in 16 bits removes most of the remaining mismatch between the model generating training data and the one trained.",
+  "published": "2026-11-02",
+  "updated": "2026-11-02",
+  "categories": [
+   "cs.DC",
+   "cs.CL",
+   "cs.LG",
+   "cs.DC"
+  ],
+  "score": 92
+ },
+ {
+  "id": "2611.14356",
+  "title": "EngineAgent: Agentizing On-Device LLM Inference Engines with Inference Stack Hierarchy Awareness and Hardware Abilities",
+  "abstract": "Rapidly evolving LLM architectures and heterogeneous mobile hardware make supporting new models in on-device inference engines a recurring and costly system challenge. Each model may require coordinated changes across conversion, graph construction, operators, and hardware backends. Existing coding agents often miss these cross-layer dependencies and struggle to diagnose failures across host--device execution paths. We present EngineAgent, an agentic system for automating on-device LLM model enablement. Its key insight is to separate reusable engine and hardware knowledge from model-specific implementation. Before enablement, EngineAgent constructs a hierarchy-aware engine index that captures engine abstraction layers and cross-layer dependencies, and pre-validates backend-specific build, execution, and debugging workflows using already supported models. For each new model, a builder uses this knowledge to coordinate cross-layer changes, while an auditor checks implementation completeness and drives iterative debugging through device-side validation. Across 12 tasks spanning three mobile LLMs and four engine--backend pairs on CPUs, GPUs, and NPUs, EngineAgent achieves 75% end-to-end success with either of two underlying LLMs, versus 33.3% for the strongest coding-agent baseline. Success requires compilation, on-device execution, and output-logit agreement with reference implementations. EngineAgent also reduces average per-task time and model-API cost relative to baselines using the same underlying LLMs.",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.OS",
+   "cs.AI",
+   "cs.CL",
+   "cs.SE",
+   "cs.OS"
+  ],
+  "score": 90
+ },
+ {
+  "id": "2611.09825",
+  "title": "BitDecoding-FP4: Native FP4 KV Cache Decoding via Algorithm-System Co-Design",
+  "abstract": "The key-value (KV) cache dominates memory capacity and bandwidth in long-context LLM serving. While 4-bit microscaling formats (NVFP4, MXFP4) shrink the cache and run attention on FP4 Tensor Cores, a fundamental gap remains between algorithmic quantization and system-aware acceleration: existing FP4 KV systems use vanilla quantization that causes severe accuracy drops, whereas accuracy-oriented 4-bit algorithms rely on vector codebooks whose lookup overhead degrades decoding throughput. We present BitDecoding-FP4, an algorithm--system co-design for accurate and efficient native FP4 KV decoding. We mitigate three error sources: Dual-Residual Query Quantization splits queries into two FP4 tensors, cutting query logit error from 60% to 1%; Underflow-Aware Probability Scaling prevents E4M3 scales from rounding long-context probabilities to zero; and Outlier-Aware Key Quantization combines static smoothing, Hadamard rotation, and scale search to suppress key outliers under token-wise scaling. At the system level, we remove the softmax bottleneck via transposed softmax with fused probability quantization and stacked query MMA on paged KV caches. Across dense and MoE models with GQA and MLA, BitDecoding-FP4 stays within 0.5 points of BF16 KV accuracy with NVFP4 (1 point with MXFP4), and tracks BF16 KV in RL training rollouts. In end-to-end serving on NVIDIA B300 with Qwen3-4B and Qwen3-30B-A3B, it delivers 2.4-3.0$\\times$ higher peak serving throughput than BF16 KV. The implementation is available at https://github.com/OpenBitSys/BitDecoding-FP4.",
+  "published": "2026-11-06",
+  "updated": "2026-11-06",
+  "categories": [
+   "cs.AI",
+   "cs.AR",
+   "cs.CL",
+   "cs.PF",
+   "cs.AI"
+  ],
+  "score": 88
+ },
+ {
+  "id": "2610.39853",
+  "title": "KV Cache Quantization for Diffusion Language Models",
+  "abstract": "KV cache quantization is well studied for autoregressive language models, where cached prefix states are exact under causal attention and quantization is mainly a cache reconstruction problem. Diffusion language models (dLLMs) break this assumption. Fast dLLM inference reuses KV states across denoising steps, but bidirectional token representations can change as masked tokens are revealed, so the reused cache may already differ from full recomputation before quantization is applied. We study KV cache quantization under this cache-reuse error. We adapt KIVI and KVQuant to Fast-dLLM-style prefix and dual cache reuse, and introduce TRACE and dLLM-KVQ. TRACE reconstructs feasible dLLM reveal trajectories from prompt-answer pairs, providing calibration states that match iterative masked decoding. dLLM-KVQ uses these trajectories to choose per-layer K-cache entries that remain in high precision according to output- and attention-level behavior metrics, while applying standard low-bit value quantization. Across LLaDA and Dream evaluations on GSM8K, HumanEval, MATH, and MBPP, dLLM-KVQ achieves the highest average score among quantized methods across the reported 4-bit and 2-bit prefix/dual cache settings.",
+  "published": "2026-10-29",
+  "updated": "2026-10-29",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 87
+ },
+ {
+  "id": "2611.01864",
+  "title": "Quantizing Recurrent Language Models Is Easier Than You Think",
+  "abstract": "Linear recurrences are becoming an increasingly common building block in large language models, replacing the growing KV cache of softmax attention with a fixed-size recurrent state that enables efficient decoding. However, the quantization stack has largely been developed around softmax Transformers, whose numerical properties and inference state differ from those of recurrent models. Our goal is to understand these differences and study the design space of quantization methods for recurrent models. In our analysis, we differentiate between two targets. First, extra-state quantization concerns weights and activations outside the recurrent state, whose distributions are shaped indirectly by the sequence mixer during training. In controlled 1.3B parameter models, we find that decayed recurrences develop weaker residual outlier channels than softmax attention and are therefore easier to quantize without incoherence processing. Second, intra-state quantization concerns the recurrent state itself during decode, where repeated updates create a different numerical problem from KV cache quantization. We instantiate our findings as LoReS, a state quantization pipeline combining value-axis scale grouping to match output channel magnitude, decay-based mixed-precision to protect slowly decaying heads or channels, and stochastic rounding to limit error accumulation under repeated requantization. Across Qwen-3.5 9B, Nemotron-H 8B, and Kimi-Linear 48B-A3B, LoReS supports robust 8-bit state quantization and lower effective precision on shorter decode horizons. We implement LoReS in vLLM and demonstrate end-to-end decode speedups.",
+  "published": "2026-11-01",
+  "updated": "2026-11-01",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 87
+ },
+ {
+  "id": "2611.14009",
+  "title": "Coding Agent Memory Post-Training II: Unlocking the Memory Potential of Pre-trained File Operations for Long-Horizon Tasks via On-Policy Distillation",
+  "abstract": "Language-model agents increasingly tackle long-horizon tasks whose interaction histories exceed the model's active context. They must therefore decide what to write down and what to read back, and when to do either. Recent work has begun to use on-policy distillation (OPD) to make memory control part of the policy, relying on memory tools and compaction protocols that lie outside either model's pre-training. However, this weakens the distillation on both sides: the teacher cannot give useful guidance on an interface it has never used, and the student samples too few meaningful memory actions for that guidance to take effect. To study this problem, we introduce Coding Agent Memory Gym II (CAMG-II), a suite of long-horizon agentic-RL environments spanning Shop, Coding, AutoResearch, General, and Visual. Alongside each environment's native task interface, CAMG-II provides ordinary Bash access and an episode-persistent workspace, enabling the policy to create, revise, search, and reuse files as memory across context replacements. We also introduce Coding Agent Memory Post-Training II (CAMP-II), which trains a single policy jointly across all five environments with fully asynchronous OPD to learn this file-based memory behavior directly from a frozen teacher with a prior for file operations. On CAMG-II, CAMP-II obtains 2.97 times the gain of the strongest OPD baseline. The memory behavior CAMP-II learns generalizes to two external benchmarks, Terminal-Bench 2.1 and SWE-Bench Pro V2, with improved success rates.",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 87
+ },
+ {
+  "id": "2610.37921",
+  "title": "FAD-KV: Adaptive Dictionary KV Caching for Efficient Reasoning Decoding",
+  "abstract": "Key-value (KV) caching is a core mechanism in large language models, where intermediate key and value representations are stored to accelerate autoregressive decoding. As generation length increases, KV cache memory and computation grow linearly, making compression critical for efficient long-output reasoning. Dictionary-based sparse KV compression is appealing because it represents each token's KV states as a sparse combination of learned basis elements (atoms) in a dictionary, preserving token-level structure without enforcing a global low-rank constraint. However, existing dictionary-based methods face two practical limitations during decoding: iterative sparse coding methods such as Orthogonal Matching Pursuit add decoding-time overhead, and static dictionaries may mismatch evolving KV distributions under test-time generation. While adaptive dictionary updates can reduce this mismatch, naive append-only strategies lead to dictionary growth during generation. We propose FAD-KV, a \\textbf{F}ast \\textbf{A}daptive \\textbf{D}ictionary KV caching framework for efficient reasoning decoding. FAD-KV integrates (i) a screening-based sparse coding scheme, where a one-shot Top-\\(n\\) selection identifies a small candidate pool followed by lightweight coefficient refinement, and (ii) a fixed-size dictionary adaptation mechanism that reuses inactive atoms instead of expanding the dictionary. By controlling both sparse coding cost and adaptive dictionary growth, FAD-KV provides a memory-bounded and computation-efficient KV compression framework for long reasoning workloads. Experiments on reasoning and long-context benchmarks show that FAD-KV achieves a strong quality-efficiency trade-off while avoiding unbounded dictionary growth during decoding.",
+  "published": "2026-10-27",
+  "updated": "2026-10-27",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 86
+ },
+ {
+  "id": "2611.10240",
+  "title": "PACE: Keeping the Right Tokens in the KV Cache Is Not Enough for Long-Horizon LLM Agents",
+  "abstract": "Long-horizon LLM agents accumulate sessions of up to millions of tokens, far more key-value (KV) cache than one GPU holds, so serving systems keep a small budget of tokens and evict the rest. Eviction methods differ in which tokens they keep but share one goal: that the tokens a later step needs are still cached. We show this is not enough. In 100K-token coding sessions on Qwen3-8B with a 2,048-token budget, a planner-guided policy that keeps over 99% of the needed tokens resident still fails late steps increasingly often: its accuracy falls from 93% to 64% as the gap between a definition and its use grows from 2K to 90K tokens, at residency 0.996. The needed tokens are resident but unretrievable: what grows is their rotary-position distance to the query. We present PACE (Planner-Aware Context Engine), a KV-cache engine that couples plan-aware retention, in which the agent's planner tells the cache which context future steps will read, with bounded positions, which renumber kept tokens so their rotary distance to the query stays below 8K at any session length. In a pre-registered evaluation on fresh tasks, PACE passes 97% of hidden unit tests at 100K tokens, against 42% for H2O and 3% for SnapKV under the same budget, and needs both components: either alone reaches 63% (the combination beats each, p &lt; 10^-4). The result holds with length: in 1M- and 2M-token sessions on one 24 GB GPU, with definitions written 0.9M and 1.8M tokens before use, PACE passes 99% and 100% of checks and recalls every session fact, while bounded positions without foresight falls from 33% to 13%; PACE holds under 0.7 GB of KV state where the full cache would need 147-295 GB. Renumbering is exact, costs no measurable perplexity, and adds 9% wall time. On Mistral-7B, whose coding ability caps it at 40% even with nothing evicted, PACE stays at that ceiling while retention alone falls below it.",
+  "published": "2026-11-06",
+  "updated": "2026-11-06",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.DC",
+   "cs.LG"
+  ],
+  "score": 85
+ },
+ {
+  "id": "2611.13426",
+  "title": "BioMem: Agentic Memory for Biomedical LLM Agents",
+  "abstract": "Large language models (LLMs) have demonstrated considerable potential in biomedical applications, while agentic memory systems have emerged as a promising approach to preserving and utilizing information across tasks and interactions. However, a fundamental question remains: how effectively and reliably do these systems retain, retrieve, update, and utilize biomedical information? In this study, we systematically investigate agentic memory in the biomedical domain, focusing on task effectiveness, retrieval quality, information fidelity, and long-term robustness. We evaluate five memory approaches across four LLMs in three representative settings: biomedical knowledge reasoning, clinical prediction, and long-term conversational memory. Our analyses reveal how memory construction, evidence relevance, and conversational history shape downstream biomedical performance, highlighting the distinct challenges of retrieving relevant information, preserving its fidelity, and effectively utilizing it for reasoning. Building on these findings, we introduce Hybrid Memory Retrieval and Utilization (HMRU), a training-free framework that jointly enhances evidence accessibility and task-aware utilization to improve biomedical reasoning and long-term conversational memory. HMRU achieves an average relative improvement of 8.6% across biomedical question-answering and conversational memory benchmarks, with additional gains in selected clinical prediction tasks. It further reduces conversational answer errors by 24.9% and closes 48.0% of the performance gap to full-context inference. Our findings provide a systematic characterization of biomedical agentic memory and practical insights into developing more effective and reliable memory-augmented LLM systems.",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 85
+ },
+ {
+  "id": "2611.07025",
+  "title": "LowRAM: Low-Rank Keys and Amortised Values for Composable KV Cache Compression at Test-Time",
+  "abstract": "Autoregressive decoding relies on the KV cache, whose memory footprint grows linearly with context length and caps batch size and throughput. Existing post-training methods exploit redundancy across tokens, layers, and feature dimensions, or lower numerical precision. We identify a complementary axis: within each attention head, values are largely predictable from their corresponding keys. We exploit this with value cache amortisation, which fits a lightweight per-head predictor at test time and stores residuals only for the tokens it reconstructs worst, giving $4\\times$ near-lossless value compression. The predictor can be initialised by meta-learning for substantially reduced prefill overhead, or fitted from scratch in settings that allow a one-off cost, such as multi-query inference. We pair value amortisation with cross-layer low-rank key compression to produce LowRAM, an asymmetric compression pipeline that stays close to lossless across three model families. By reconstructing only a selected subset of KV pairs at each decoding step, LowRAM can keep decoding overhead minimal and achieve up to $5\\times$ higher peak decode throughput at $4\\times$ compression. LowRAM further composes with quantisation and eviction, reaching $26.9\\times$ compression at $94.5\\%$ of baseline performance on long contexts. These results show that treating keys and values as structurally distinct enables efficient, aggressive, and composable KV cache compression.",
+  "published": "2026-11-04",
+  "updated": "2026-11-04",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 84
+ },
+ {
+  "id": "2611.02011",
+  "title": "MedPsy: State-of-the-Art Small Medical Language Models for Efficient Edge Deployment",
+  "abstract": "Medical language models promise expert clinical support, but the strongest open-source LLMs remain too large for private edge-device deployment, while compact medical models still trail substantially on knowledge-intensive and real-world healthcare tasks. Reasoning models that fit edge memory budgets can produce long reasoning traces, increasing sequential decoding, end-to-end latency, energy consumption, and KV-cache memory pressure. We present MedPsy, a family of text-only 1.7B and 4B medical language models designed for edge deployment, targeting this accuracy-generation-efficiency trade-off. Our recipe combines a synthetic medical data pipeline over biology, medicine, and health seeds with chain-of-thought targets from a 235B medical-focused LLM teacher; a four-stage post-training curriculum comprising two SFT stages followed by two RL stages with hard-sample mining; and an edge deployment evaluation spanning multiple GGUF quantization variants and real-device inference on laptop and smartphone hardware. On seven closed-ended medical benchmarks, MedPsy-4B surpasses MedGemma-1.5-4B by 19.34 points and matches MedGemma-27B while being 6.75x smaller; MedPsy-1.7B outperforms MedGemma-1.5-4B by 11.42 points despite being less than half its size. On HealthBench-Hard, MedPsy-4B surpasses MedGemma-27B by 15.33 points, while MedPsy-1.7B surpasses it by 11.66 points despite being ~16x smaller. Beyond accuracy, MedPsy reduces average response length by 1.7x (1.7B) and 3.2x (4B) versus its Qwen3 backbones, while Q4_K_M quantization preserves the aggregate score within 1 point of BF16 with ~69% lower disk footprint. In real-device inference, MedPsy-4B's shorter generations translate into 75% lower median end-to-end latency and estimated energy per answer than its Qwen3 backbone at matched quantization, while peak RAM remains below 5 GB across our tested laptop and smartphone configurations.",
+  "published": "2026-11-01",
+  "updated": "2026-11-01",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 82
+ },
+ {
+  "id": "2610.39562",
+  "title": "Raincheck: Deferred Multimodal Prefill for Efficient Multi-Turn MLLM Inference",
+  "abstract": "Multi-turn conversations with multimodal large language models (MLLMs) reuse input context, but long multimodal inputs increase time to first token (TTFT). Query-aware hard pruning reduces prefill tokens but permanently excludes information that later questions may require. We propose Raincheck, a framework for deferred multimodal prefill that decouples initial token selection from later information availability. An existing pruning method selects tokens for initial prefill; Raincheck preserves and progressively prefills unselected tokens in source order using unused compute capacity during decode. Unfinished prefill continues after answer return during available scheduling gaps. Attention visibility control and affine state mapping enable context updates after generation begins in full-attention and hybrid recurrent models. Prefill-decode fusion reduces repeated weight reads. We evaluate Qwen3-VL-8B and Qwen3.5-9B with 30% initial multimodal-token retention. Across both models and four pruning methods, Raincheck recovers on average 77.7% and 60.4% of the quality lost to matched hard pruning on MultiVerse and ConvBench, respectively. On MultiVerse, the SGLang implementation reduces mean first-turn TTFT by up to 24.1% relative to full prefill, with less than 0.5% increase in mean time per output token (TPOT).",
+  "published": "2026-10-29",
+  "updated": "2026-11-03",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 81
+ },
+ {
+  "id": "2611.01320",
+  "title": "Step-dLLM: Adaptive Step-aware Sparse Attention for Efficient Diffusion LLM Inference",
+  "abstract": "Diffusion large language models (dLLMs) generate tokens in parallel via iterative denoising, but their bidirectional attention prevents the KV caching used by autoregressive models and recomputes the full attention map at every step, incurring quadratic per-step cost. Existing sparse attention methods for dLLMs construct a sparse mask after an initial full-attention warm-up and reuse it for the remaining steps, while allocating the sparsity budget uniformly across heads. We argue both choices ignore key structural properties of attention in dLLMs: empirically, attention patterns are only locally consistent across steps and shift abruptly at certain transitions, and different heads concentrate their attention mass to very different extents. To this end, we design Step-dLLM, which periodically refreshes a block-sparse mask at anchor steps along the denoising trajectory and reuses it within each locally consistent interval, while employing a head-adaptive global budget that more aggressively compresses heads with concentrated attention. Backed by a fused IO-aware Triton kernel for block-sparse attention, Step-dLLM applies to pre-trained LLaDA-1.5 and Dream-7B-Instruct without retraining, achieving a 2.78x end-to-end speedup over dense FlashAttention on LLaDA-1.5 at 8K context with 256 denoising steps and 90% sparsity, while improving the accuracy-latency trade-off over prior sparse-attention methods.",
+  "published": "2026-10-31",
+  "updated": "2026-10-31",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 80
+ },
+ {
+  "id": "2611.07558",
+  "title": "SKIM: Pruning Large Language Model Agents via Selective Knowledge Informed Masking",
+  "abstract": "Large Language Model (LLM) agents are increasingly deployed under structured generation, where grammar constraints enforce output format at inference time. Whereas existing compression methods target unconstrained generation, we first identify a fundamental mismatch: under structured generation, grammar constraints reduce the model's output distribution to valid tokens, and the logits matter most at the small set of positions that decide the agent's action. Motivated by this finding, we propose SKIM (Selective Knowledge-Informed Masking), the first pruning and distillation framework for LLM agents under structured generation, with both stages guided by token role. SKIM partitions token positions into context, decision, and format categories, and this partition drives two complementary axes: (1) category-aware pruning saliency scores that preserve parameters most relevant for decision positions; and (2) an on-policy distillation objective that aligns student and teacher on valid tokens, paired with category-aware feature matching. We evaluate SKIM on tool-calling benchmarks and within multi-step agent loops, across multiple model scales and sparsity levels. SKIM consistently improves accuracy over baselines, with its superiority becoming most striking in high-sparsity regimes where conventional methods struggle, demonstrating the potential of category-aware compression for deployment-time grammar-constrained agents.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 80
+ },
+ {
+  "id": "2611.13188",
+  "title": "One-Sided Expert-Parallel All-to-All for Mixture-of-Experts Inference over NVLink",
+  "abstract": "Expert parallelism (EP) shards the experts of a Mixture-of-Experts (MoE) layer across GPUs, so every MoE layer requires two all-to-all communications, namely dispatch and combine. Compared with training, inference processes relatively few tokens per GPU at a time, and at small batch sizes fixed costs that do not grow with the number of tokens, rather than data movement, dominate the latency. We present NVLinkOneSided, a one-sided EP all-to-all for GPUs within a single NVLink domain. Each source rank pushes its tokens, without first exchanging metadata, into rank-major buffers on the target GPUs, and the grouped GEMMs read them in place instead of from a per-expert copy. We provide two protocols for the synchronization that the communication requires, namely Fence and Sentinel, for high-throughput and low-latency scenarios respectively. On Blackwell GPUs, NVLinkOneSided completes dispatch and combine 1.2-3.0$\\times$ faster than DeepEP, with the largest speedups at small batch sizes. The resulting MoE layer is up to 2.4$\\times$ faster than DeepEP with DeepGEMM. It even outperforms the fused DeepGEMM MegaMoE at up to 128 tokens per GPU, making it still competitive for decoding. We expose NVLinkOneSided through a modular interface, so that it is agnostic to the activation quantization format, decoupled from the MoE compute backend and easy to integrate into inference frameworks.",
+  "published": "2026-11-09",
+  "updated": "2026-11-09",
+  "categories": [
+   "cs.DC",
+   "cs.CL",
+   "cs.LG",
+   "cs.PF",
+   "cs.DC"
+  ],
+  "score": 80
+ },
+ {
+  "id": "2611.06956",
+  "title": "Octopus: One Brain, Many Branches for Latent-KV Multi-Agent Reinforcement Learning",
+  "abstract": "Deep search and long-horizon reasoning unfold as branching trajectories that pursue parallel sub-queries, abandon dead-end detours, and cross-check sibling findings. Yet modern serving engines, harnesses, and RL trainers execute episodes as flat, append-only sequences: stretching a context window leaves failed detours that dilute attention, in-place edits break KV caching and recurrent states, and all-layer cache splicing overwrites hybrid recurrent working memory and triggers hijacking. We introduce Octopus, a co-designed serving runtime, memory manager, and RL framework executing episodes as a GPU-resident DAG over radix cursors (89.6% KV hit rate). Agents coordinate via five primitives: fork shares parent KV prefixes in $O(1)$ with isolated 32K budgets, rewind restores recurrent checkpoints, read_thread mounts sibling KV pages in zero copy, and wait and done synchronize results. Octopus splices sibling KV pages only into full-attention layers under monotonic position offsets while recurrent layers skip mounted spans, retaining 92.2% of full-text answer information and cutting hijacking $21\\times$ ($57.9\\% \\to 2.7\\%$) with zero new KV pages. During RL, our packed DAG kernel and DAG-GRPO objective deduplicate shared prefixes via loss masks while keeping mounted KV edges differentiable, cutting rollout-training KL divergence $32\\times$ and routing reader gradients into producer KV projections. Trained on Qwen3.5-4B with binary rewards, Octopus self-organizes a commander-worker hierarchy and latent KV mesh, lifting BrowseComp-Plus accuracy under BM25 from 26.0% (32K ReAct) and 32.1% (143K GRPO) to 49.6% (+17.5 pts; 51.2% on OpenResearcher), surpassing 9B context-editing RL (42.5%), matching o3 (49.3%), and outperforming dense-retrieval agents up to $250\\times$ larger: Tongyi-DeepResearch (44.5%), DeepSeek-R1 (16.4%), Kimi-K2 (35.4%), GPT-4.1 (36.4%), and Claude 4 Opus (36.8%).",
+  "published": "2026-11-03",
+  "updated": "2026-11-06",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 79
+ },
+ {
+  "id": "2611.12062",
+  "title": "Translating KV Caches Between Hybrid-Attention Language Models: MLA Latents, Linear-Attention States and Sparse-Attention Indexers",
+  "abstract": "A model that takes over another model's conversation must normally re-read the whole history; a text hand-off shortens the re-read only by dropping content. KV-cache translation instead maps the source's cache into the target's own format, so the target continues from the full context without re-reading it. It works for grouped-query attention (GQA), but open-weights frontier models now cache compressed latents (MLA), sparse-attention indexer keys and fixed-size linear-attention states. We replicate KV-Lingo on a GQA pair and then give, for each of these objects, where to capture and inject it and a mechanism that reaches native quality. We study two hybrid pairs at 16-48B scale in both directions, Kimi-VL-A3B - Kimi-Linear-48B (MLA - MLA + Kimi Delta Attention) and Qwen3.5-27B - Qwen3.8-27B (Gated DeltaNet hybrids), plus a sparse-attention target (Qwen3.8-27B - Qwen3.8-Flash-Next). MLA latents translate with token-wise linear maps; recurrent states are copied with a closed-form correction or synthesised by replaying the target's own recurrence. Exact long-range recall needs token identity: decoding token ids from the source's layer-0 MLA latent raises needle recall from 0.09 to 0.99 at 2-32K and to 0.83-1.00 at 64K, eight times the longest training prompt. The hybrid full-MLA direction is within the paired confidence interval of native quality on every task metric, and same-shape GDN hybrids reach the native level in both directions (apart from 6% refusals inherited from the source), with time to first token 18.7 and 46.8 times shorter than a re-read at 64K tokens. Segment-wise multi-turn transfer stays at the re-prefill level; naive re-translation collapses. On the sparse-attention target, predicted indexer keys recall the needle as well as the target's own keys (one seed). We state as a hypothesis how the recipes transfer to 300B+ hybrid flagships.",
+  "published": "2026-11-09",
+  "updated": "2026-11-09",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 79
+ },
+ {
+  "id": "2610.41552",
+  "title": "Enhancing Knowledge Entity Relation Extraction in Abstracts and Full-text Content of Academic Articles Using Large Language Models",
+  "abstract": "This study investigates the effectiveness of large pre-trained language models (LLMs) for knowledge entity relation extraction (KERE) from academic papers. Existing studies have examined individual types of LLM-based strategies and evaluated model performance using metrics such as precision and recall. To provide a broader evaluation, this study investigates multiple strategies, including closed-source LLM-based CoT prompting, LoRA-adapted open-source LLMs, LLM-enhanced small pre-trained language models (SLMs), and SLM-enhanced closed-source LLMs. In addition, this study introduces two strategies, namely SLM-enhanced open-source LLMs and closed-source LLM-enhanced open-source LLMs. These strategies are evaluated from multiple perspectives, including metrics, their ability to mitigate errors observed in SLMs, and potential directions for model optimization. This study manually constructs two annotated datasets in the NLP domain, covering Abstract and Full-Text datasets. Experimental results show that the LoRA-adapted T5 model achieves the highest macro F1 scores of 0.7408 and 0.7013 on the Abstract and Full-Text datasets, respectively. SLMs also benefit from LLM-generated entity descriptions under the LLM-enhanced SLM strategy. Error analysis further reveals that the effectiveness of LLM-based strategies in mitigating SLM errors varies across error types. Based on the identified limitations and error patterns of these strategies, several optimization directions are proposed. In addition, combining strategies with different error patterns further improves KERE performance.",
+  "published": "2026-10-30",
+  "updated": "2026-11-02",
+  "categories": [
+   "cs.CL",
+   "cs.DL",
+   "cs.IR",
+   "cs.CL"
+  ],
+  "score": 77
+ },
+ {
+  "id": "2610.39854",
+  "title": "Attention, Dynamic Wave and Hybrid Sequence Mixers in Language Models",
+  "abstract": "Large Language Models (LLMs) rely on Multi-Head Attention (MHA) for sequence modeling, but scaling to long contexts is constrained by the quadratic cost of attention, motivating sub-quadratic recurrent alternatives. This paper formalizes a Dynamic Wave recurrent layer, based on input-dependent exponential damping and cosine phase modulation, and evaluates three 10.94M-parameter configurations (Pure Transformer, Pure Wave, and Hybrid Wave-Attention) on TinyStories under perplexity, latency, throughput and peak VRAM profiling up to 4096 tokens. The Hybrid configuration reaches the best perplexity, 5.95 on the full held-out split against 6.93 for the Transformer and 7.26 for Pure Wave. The efficiency picture, however, is governed by implementation rather than by architecture. Against an unfused attention baseline, Pure Wave uses 78.7% less peak VRAM at a 4096-token context (1404.3 MB vs. 6601.6 MB); against a fused scaled-dot-product attention kernel the same comparison yields no advantage at all (1404.3 MB vs. 1403.6 MB), and in training mode Pure Wave is 8.3% more expensive than the Transformer. Likewise, hoisting elementwise terms out of the recurrence loop speeds the layer up 2.53-fold with no custom kernel, reducing its latency gap to attention from 2.48-fold to 1.12-fold. A hybrid stack is found to inherit the cost of its more expensive mixer rather than the advantage of its cheaper one, its peak VRAM matching the Pure Transformer to within 0.1%. A closed-form memory model reproduces these measurements and predicts the context length beyond which attention overtakes the vocabulary projection. The findings indicate that reported efficiency gains for recurrent attention replacements must be stated relative to a named attention backend and a named implementation, and that hybridization is best justified on quality grounds.",
+  "published": "2026-10-29",
+  "updated": "2026-10-29",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 76
+ },
+ {
+  "id": "2611.07232",
+  "title": "Recursive Sparse Attention: Million-Token Length Extrapolation at Logarithmic Cost",
+  "abstract": "At context lengths of about 1M tokens, dense attention is costly in prefill and decoding, and training typically relies on long documents, which become scarcer as the target length increases. Most sparse attention methods score all preceding blocks or tokens, so their selection cost per query is $O(L)$ at context length $L$; hierarchical selection reduces it to $O(\\log L)$, but prior trainable hierarchical methods report accuracy only within their training length. We propose RecSA (Recursive Sparse Attention), which builds a tree over the KV cache in which each node summarizes its subtree with one key and one mean-pooled value. The keys come from one pooler per layer, shared by all levels and distilled from dense attention. Each level above the tokens selects at most $k$ candidates, so each query has $O(\\log L)$ selection cost and reads $O(\\log L)$ entries; the summaries of unselected candidates share one softmax with the exact tokens. Each entry's RoPE position is its index among the candidates of its level, so at any length every relative distance stays within the range seen during training. Initialized from Qwen3-4B and trained on 0.62B tokens at the original model's 32K training length, RecSA outperforms all baselines on RULER at every length from 131K to 2M; at 1M, it scores 60.5, compared with 40.0 for the best baseline, Dense + DCA. With our optimized kernels, RecSA is faster than dense attention in end-to-end prefill and decoding from 64K to 2M; at 524K on one H200 GPU, it accelerates prefill by 3.2x and decoding by 3.8x.",
+  "published": "2026-11-04",
+  "updated": "2026-11-04",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 76
+ },
+ {
+  "id": "2610.38366",
+  "title": "TCC-RAG: Temporal Causal Chain-Guided RAG for Temporal Knowledge Graph Question Answering",
+  "abstract": "Recent advances in large language models (LLMs) have spurred growing interest in temporal knowledge graph question answering (TKGQA). Most existing methods rely on semantic retrieval augmented generation (RAG), which suffers from fundamental limitations in complex temporal reasoning. On the one hand, semantic-based RAG methods struggle to capture the multi-hop causal knowledge required for complex temporal reasoning. On the other hand, these methods introduce excessive redundant knowledge, trapping LLMs in spurious reasoning chains that potentially result in erroneous answers. To address these problems, we propose a Temporal Causal Chain-guided RAG (TCC-RAG) to retrieve a concise yet sufficient set of causal knowledge to support complex temporal reasoning. Specifically, we reformulate the temporal knowledge graph into a multi-view causal cue graph, with causal cues inducing connections that explicitly encode temporal evolution and causal dynamics. Based on the causal cue graph, we construct a query-specific temporal causal chain to guide the retrieval process, enabling the model to focus on a concise set of causally relevant knowledge. Finally, we introduce a causal evidence filter to refine the retrieved knowledge, ensuring its causal consistency with the underlying temporal logic of the query. Experiments show that TCC-RAG achieves substantial performance gains of 10.72% and 8.40% on two TKGQA benchmarks, and delivers a remarkable 62.97% improvement for multi-step temporal reasoning.",
+  "published": "2026-10-28",
+  "updated": "2026-10-28",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 75
+ },
+ {
+  "id": "2611.00450",
+  "title": "From Lookups to Lessons: Turning Retrieved Knowledge into Parametric Memory",
+  "abstract": "Retrieval-augmented generation (RAG) helps large language models (LLMs) answer factual questions beyond their training data, but it adds storage and inference costs. Distilling previously retrieved information into parametric memories enables reuse without online retrieval. However, training the memory to mimic a retriever rewards accurate independent predictions, which do not necessarily improve the final output quality when combined with the LLM's existing predictions. To address this, we introduce ResMem, in which the LLM reads retrieved text offline to generate teacher targets. This design avoids storing massive token representations, unlike existing parametric memory approaches such as MLP Memory, which relies on k-nearest neighbor (kNN) datastores. Furthermore, by using the LLM as an offline teacher that reads privileged retrieved evidence alongside the input, we train a parametric memory to learn an additive logit residual. This residual aligns the predictions of a student sharing the same backbone with the teacher distribution, while self-distillation updates remain confined to the parametric memory. On a Wikipedia subset, ResMem reduces the storage retained for teacher construction by 94.7% compared with the evaluated kNN pipeline. Across five question answering datasets, ResMem raises mean token F1 from 32.83% for the frozen LLM to 34.48%. It also breaks 21% fewer of the LLM's correct answers than a kNN-trained memory. These findings validate our motivation of treating retrieval as a learning resource, with parametric memory shaped by how retrieved knowledge is used to inform the model's future predictions. Code and model weights are available at https://github.com/SSRand/From-Lookups-to-Lessons and https://huggingface.co/RandHan/ResMem-Mistral-7B-v0.3.",
+  "published": "2026-10-30",
+  "updated": "2026-10-30",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 75
+ },
+ {
+  "id": "2610.34585",
+  "title": "Large Language Models: A Plain-Language Overview for Engineers",
+  "abstract": "Large language models (LLMs) are neural networks trained on huge text collections to generate text by predicting what comes next. Engineers using ChatGPT and other generative artificial intelligence (AI) tools need a clear picture of what training changes and prompts add. The article starts with the Transformer, which connects words in context, and pre-training, where models learn to predict text. It then explains how fine-tuning adapts models to requests, with reinforcement learning from human feedback using human answer rankings. Next, retrieval-augmented generation (RAG) supplies documents, while chain-of-thought prompting encourages intermediate steps and agents use tools. FlashAttention lowers training and running costs by reducing data movement during attention; quantized low-rank adaptation (QLoRA) saves fine-tuning memory. Readers get a life cycle figure and tables comparing methods and their limits. A short checklist for judging LLM evaluation claims flags test material in training (data contamination) and model-based grading (LLM-as-a-judge). It also covers very long inputs (long context) and hallucination, meaning false or unsupported claims. Check factual accuracy separately from whether an answer sounds helpful.",
+  "published": "2026-10-25",
+  "updated": "2026-10-25",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 74
+ },
+ {
+  "id": "2610.40350",
+  "title": "Don't Lose the Thread: Empowering Long-Horizon LLM Agents with Cognitive Resource Self-Allocation",
+  "abstract": "Agents powered by large language models (LLMs) have demonstrated remarkable progress in solving complex reasoning tasks. However, LLM agents often falter on long-horizon tasks due to cognitive overload, as their working memory becomes cluttered with expanding and irrelevant information, which dilutes their attention and hinders effective planning and reasoning. To mitigate this challenge, we introduce Cognitive Resource Self-Allocation (CORAL), a novel reasoning paradigm that empowers agents to proactively optimize their context. Implemented as an agent-callable working memory management toolset, CORAL allows an agent to checkpoint its task progress and verified facts, and adaptively initiate a new problem-solving episode by resetting cluttered context while preserving only the checkpointed information, enabling it to resume reasoning from a clean state. We further enhance the agent's checkpointing capabilities using a Multi-episode Agentic Reinforced Policy Optimization algorithm. On the GAIA benchmark, CORAL with an 8B model achieves 42.8% average accuracy, with particularly strong gains on the most challenging long-horizon tasks (Level 2 and Level 3). Crucially, these gains come at a substantially lower inference cost: CORAL consumes 6-7$\\times$ fewer input tokens than a ReAct agent. It also generalizes to multi-hop Knowledge QA benchmarks and to the considerably harder BrowseComp, where it improves a strong proprietary agent by 8.0 points.",
+  "published": "2026-10-29",
+  "updated": "2026-10-29",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 74
+ },
+ {
+  "id": "2611.05927",
+  "title": "Modality-Aware Expert Pruning for MoE-Based Multimodal Large Language Models",
+  "abstract": "Mixture-of-Experts (MoE) enables multimodal large language models (MLLMs) to scale capacity efficiently, but expert parameters dominate memory even though only a few experts are activated per token: they account for over 90% of model size in modern MoE-MLLMs (e.g., 54 GB out of about 58 GB in BF16 for InternVL3.5-30B-A3B and Qwen3-VL-30B-A3B). Expert pruning has emerged as an effective compression strategy, but existing methods aggregate importance uniformly across tokens, ignoring that the same expert may serve different roles for vision versus language processing. To address this, we propose MAEP (Modality-Aware Expert Pruning), a training-free framework that decomposes expert importance by modality in a single forward pass. MAEP introduces (1) Delta-H Output ($ΔH$), a redistribution-aware metric measuring the MoE output change when an expert is removed, and (2) low-attention vision tokens as a vision-side pruning signal that is dataset-stable: its expert-importance ranking remains stable across different datasets. Text-side importance serves as a preservation signal while vision-side importance serves as a pruning signal, and experts are ranked globally across layers. Experiments on three MoE-based MLLMs across multimodal and text benchmarks show that MAEP outperforms modality-agnostic baselines on the majority of multimodal benchmarks while remaining competitive on text-only tasks, reducing the BF16 expert weight footprint by about 27 GB (about 47% of total memory) so that the full weight footprint of an approximately 58 GB model fits within a single 40 GB GPU. Code is available at https://github.com/nota-github/MAEP.",
+  "published": "2026-11-04",
+  "updated": "2026-11-04",
+  "categories": [
+   "cs.CV",
+   "cs.CL",
+   "cs.CV"
+  ],
+  "score": 74
+ },
+ {
+  "id": "2611.08780",
+  "title": "Guardrail Erosion in Domain Fine-Tuned Large Language Models: A Paired Audit of Knowledge-Centric Abstention in Biomedical LLMs",
+  "abstract": "The number of domain fine-tuned models, particularly in the biomedical domain, is rapidly expanding. Fine-tuning promises high-performing models at a fraction of the cost of training a base model, but it can also produce unintended behavioral changes. Multiple studies have shown that safety guardrails can erode with fine-tuning, yet large-scale studies across model architectures, data mixtures, and fine-tuning methodologies remain limited. Where prior work in this space has studied value-centric refusal, this work focuses on knowledge-centric abstention. We audit 25 biomedical domain fine-tuned large language models against 11 paired base checkpoints on MedAbstain and ClinDet-Bench to evaluate the impact of fine-tuning on knowledge-centric abstention. We find that defined appropriate abstention measured by these benchmarks, already low in base models (median 8.3% on MedAbstain), falls further after fine-tuning (median 4.2%, decreasing in 21 of 25 pairs on MedAbstain), and that the magnitude and direction of change are heterogeneous across pairs. These results motivate fine-tuning methods that improve domain-specific capability while preserving appropriate caution.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 74
+ },
+ {
+  "id": "2611.13675",
+  "title": "OpticalRAG: Pixel-Space Compression for Token-Efficient Retrieval-Augmented Generation",
+  "abstract": "Retrieval-augmented generation (RAG) is bottlenecked by the token budget of large language models: feeding long documents into the context window is expensive, while aggressive textual compression discards fine-grained information that is irreversibly lost in a one-dimensional token sequence. We argue that this bottleneck is not fundamental to information density but to the choice of compression \\emph{modality}. Modern visual encoders can pack the contents of a rendered text page into roughly a hundred visual tokens with little semantic loss, opening a new compression-fidelity tradeoff that purely textual methods cannot reach. We present \\textbf{OpticalRAG}, a framework that renders documents as page images, encodes them with a frozen vision encoder, and distills the retrieved visual tokens into as few as $16$ injected tokens before passing them to the LLM. Two ingredients make this work without expensive cross-modal training: (i) \\emph{Encoder-Bridged Retrieval}, which projects text-query states into the visual feature space of the frozen encoder, through a projection shared with the compressor, to retrieve visual tokens from a text query, with no contrastive training; and (ii) \\emph{Query-Driven Distillation}, a lightweight cross-attention compressor that condenses the retrieved visual tokens into a small set of query-conditioned prefix tokens. On LongBench-v2, BAMBOO, and LooGLE-v2, OpticalRAG achieves the best compression-aware accuracy (CAP) on all three benchmarks while injecting only $16$ tokens, and improves the closed-book Qwen2.5-7B-Instruct backbone by $5.17$ points on LongBench-v2.Code is available at https://github.com/brighterr/OpticalRAG.",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 74
+ },
+ {
+  "id": "2610.37778",
+  "title": "Multi-Draft On-Policy Distillation for Diffusion Drafters",
+  "abstract": "Speculative decoding is used to reduce the inference cost of language models. One-step diffusion drafters propose a block of multiple tokens in parallel, reducing the sequential cost of speculative decoding. On-policy distillation trains these drafters using verifier feedback on their own proposals. However, parallel drafting makes this feedback difficult to use: the drafter predicts each token without observing the preceding tokens sampled within the same block, while the verifier conditions its prediction on those tokens. Different sampled prefixes therefore give different verifier targets for the same drafter prediction. We show that distilling against these targets separately can suppress tokens that are plausible after some prefixes but unlikely after others, harming draft acceptance. We explain the effects of this mismatch and introduce Multi-Draft On-Policy Distillation (MDraft), a new parallel drafter distillation method which samples several draft blocks from the same context and aggregates the verifier's full-vocabulary conditionals across their prefixes. We use all the drafts to collect information from the verifier, allowing support from alternative prefixes to influence the training target. The resulting algorithm improves the acceptance length of a parallel drafter beyond the level of pre-training, and alleviates the effects of the distributional mismatch. MDraft changes only training, retaining the drafter's architecture and inference procedure, allowing the resulting drafter to be used as-is in place of the pretrained checkpoint. Experiments on a suite of mathematical, coding, and conversational tasks show longer accepted drafts than prior distillation methods.",
+  "published": "2026-10-27",
+  "updated": "2026-10-27",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 73
+ },
+ {
+  "id": "2610.42112",
+  "title": "Subquadratic Attention with a Hierarchical Tree-Structured Indexer",
+  "abstract": "The quadratic scaling of attention is a fundamental bottleneck limiting the long-context capabilities of large language models (LLMs). A variety of approaches have attempted to circumvent this, but they either fail to match attention's expressiveness (e.g., sliding-window or linear attention variants with fixed-size state) or only achieve constant-factor speedups (e.g., sparse attention methods whose indexers themselves scale quadratically). In this paper, we derive an asymptotically subquadratic sparse attention method based on a hierarchical, tree-structured indexer, which we call Zyphra Hierarchical Attention (ZHA). ZHA constructs a tree of recursively compressed key summaries over the KV cache, which future queries traverse from the top down to retrieve a sparse subset of keys. Crucially, by iteratively growing the tree's depth, the total cost including routing and final attention grows sublinearly in sequence length, resulting in overall subquadratic (but superlinear) scaling for attention. We demonstrate that ZHA can be cheaply applied to existing pretrained models with only a short KL distillation training stage of a billion tokens, and maintains performance on long-context retrieval and challenging reasoning, mathematical, and agentic coding evaluation tasks. Moreover, we show that our method is highly robust to tree geometry including very deep trees of up to 6 levels. Finally, we develop a detailed performance model and show that our approach scales subquadratically, dramatically outperforms competing methods beyond 1 million tokens of context, and ultimately has the potential to extend effective context windows to the hundreds of millions or billions of tokens.",
+  "published": "2026-10-30",
+  "updated": "2026-11-02",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 71
+ },
+ {
+  "id": "2611.02791",
+  "title": "PGuard: A Native, Streaming, and Plug-in Guardrail for Multimodal Large Language Models",
+  "abstract": "As streaming generation becomes the dominant serving paradigm for both text-only and multimodal large language models, ensuring safety throughout the generation process has become a critical challenge. We introduce PGuard, a native, streaming, and plug-in guardrail that transforms safety monitoring from an external serving dependency into an integrated capability of the backbone model. PGuard directly leverages the backbone's intermediate representations for token-level safety detection, without altering its original inference pathway or generation behavior. Specifically, dynamic layer gating selectively aggregates residual-stream representations across layers to extract safety-relevant signals during both prefill and autoregressive decoding. To balance detection accuracy and computational efficiency, PGuard supports multiple representation-modeling architectures, including a lightweight stateless variant and sequence-aware variants built on multi-scale causal EMA-attention and GRU-based recurrent modules. Its design also accounts for the execution characteristics of LLM serving frameworks, such as SGLang, optimizing computation and data access to minimize additional runtime and synchronization overhead. As a result, PGuard incurs only 0.82-2.26% end-to-end overhead on the hundred-billion-parameter backbone Qwen3.5-122B-A10B served by SGLang. Extensive evaluations across more than 30 benchmarks spanning text and multimodal safety, jailbreaks, cyber and CBRN risks, multilingual scenarios, and real-world traffic demonstrate state-of-the-art performance among native guardrails. On text queries with Qwen3.5-9B, PGuard achieves an average F1 score of 0.836, approaching dedicated external guardrails, while supporting deployment-time configuration of category-specific thresholds and enforcement actions.",
+  "published": "2026-11-02",
+  "updated": "2026-11-03",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 71
+ },
+ {
+  "id": "2610.41480",
+  "title": "KV-Cache Patching: Tracing How and Where Fine-Tuned Behaviors Arise",
+  "abstract": "Fine-tuning a language model changes how it responds, but where is this fine-tuned behavior instantiated? To better understand this, we evaluate whether the change in model behavior arises only during the generation of the answer tokens where the change manifests, or whether altered processing of previous tokens causes it via the attention mechanism. For this, we patch the KV cache from a LoRA fine-tuned model into the unmodified base model, and vice versa. Our results show that for some behaviors, like responding in German or emergent misalignment, patching the KV cache can indeed transfer them from the fine-tuned to the base model. Correspondingly, patching the KV cache from base to fine-tune can partially or fully remove fine-tuned behavior. Furthermore, we find that the effect of patching grows with how much of the KV cache is patched and concentrates at a few pivotal positions, with system-prompt and chat-template tokens having disproportionate influence.",
+  "published": "2026-10-30",
+  "updated": "2026-10-30",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 70
+ },
+ {
+  "id": "2611.07866",
+  "title": "Do Recommenders Need to Think in Words? Latent Reasoning for Efficient LLM-Based Recommendation",
+  "abstract": "LLM-based recommender systems increasingly generate chain-of-thought (CoT) text before each item prediction to activate the LLM's reasoning capacity, costing tens to hundreds of extra tokens per recommendation at inference. We ask whether inference-time reasoning artifacts (textual or latent) can be replaced by training-time supervision alone, without loss of accuracy. We propose LatentRec, a framework for LLM-based generative recommendation that replaces inference-time reasoning artifacts with training-time per-step head supervision. LatentRec has three components. A 2.5M-parameter Continuous Thought Module iterates K latent reasoning steps over the LLM's hidden state during training. Soft Token Selection bridges the ~14x norm gap between hidden states and input embeddings. A Per-step Reasoning Loss (PRL) supervises every intermediate state through the LLM's prediction head against the first token of the target Semantic ID. The trained LLM retains this accuracy without the module at inference, so the module can be discarded at deployment. On three Amazon benchmarks, LatentRec improves HR@10 by 4.0-5.0% (relative) over a CoT-distilled baseline at 18.3x lower latency (batch=1). Per-step training supervision consistently improves accuracy across three datasets, paid once at training rather than at every recommendation.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 70
+ },
+ {
+  "id": "2611.10866",
+  "title": "The Surprising Effectiveness of Deleting Weights in LLM Post-Training",
+  "abstract": "How little of a pretrained large language model (LLM) has to change for it to acquire new capabilities? We find that zeroing fewer than 0.05% of its weights, with no other modification, matches full fine-tuning (FFT) at scale across three LLM post-training regimes: reinforcement learning with verifiable rewards, supervised fine-tuning, and on-policy distillation. Our method, Deletion Tuning, learns a binary mask over the gate projection of transformer blocks. Two practical advantages follow: the trained mask is hundreds to thousands of times smaller than the corresponding FFT checkpoint, and Deletion Tuning forgets far less, which addresses a central challenge in continual learning. Under reinforcement learning, its prior-task accuracy stays near the base level while FFT, LoRA, and random sparse fine-tuning lose up to 5.4 points. To understand why masking alone suffices, we analyze the geometry of the learned weight changes under reinforcement learning using stable rank, spectrum drift, and principal-weight overlap. Compared with LoRA and random sparse fine-tuning, Deletion Tuning is closest to FFT across the three measures.",
+  "published": "2026-11-07",
+  "updated": "2026-11-07",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 70
+ },
+ {
+  "id": "2610.37935",
+  "title": "SkillMem: Compact External Skill Memory for Latent Multi-Agent Reasoning",
+  "abstract": "Latent multi-agent systems reduce inference cost by keeping intermediate reasoning and inter-agent communication in continuous representations.\\ Reusable skills, however, are commonly supplied as text or stored as layer-wise Key-Value states or skill-specific model parameters, introducing repeated processing or substantial per-skill storage.\\ We introduce \\textbf{SkillMem}, which represents each reusable skill as a small external latent memory and makes it directly available during latent multi-agent reasoning.\\ A role-conditioned cross-attention reader allows the same memory to guide different agents according to their roles and current hidden states.\\ We train the skill memories and shared reader through behavioral distillation, matching the change in token predictions induced by a textual skill while keeping the backbone frozen.\\ For our experiments, we obtain textual skills from paired successful and failed multi-agent trajectories, although existing skills can also be compiled directly.\\ Across six benchmarks and Qwen3 models ranging from 4B to 14B parameters, SkillMem provides strong gains for smaller backbones while preserving efficient latent multi-agent inference across model scales.\\ We use the same $8\\times256$ memory configuration across all evaluated model scales, requiring 9.6\\,KB of skill-specific storage per skill, including its retrieval embedding.\\ For a library of 100 skills, SkillMem reduces total storage by more than $38\\times$ compared with alternative skill representations and achieves up to a $4.23\\times$ end-to-end inference speedup.\\ These results show that compact procedural memories can be reused without sacrificing the efficiency of latent multi-agent reasoning.",
+  "published": "2026-10-27",
+  "updated": "2026-10-27",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.LG",
+   "cs.AI"
+  ],
+  "score": 69
+ },
+ {
+  "id": "2611.08453",
+  "title": "Unpacking the Compute Efficiency of Strong-to-Weak OPD against GRPO",
+  "abstract": "On-policy distillation (OPD) trains a student on its own rollouts under a frozen teacher's per-token supervision. Does this dense signal reduce the training FLOPs needed to reach a target accuracy compared with reinforcement learning? We systematically compare vanilla reverse-KL OPD with Group Relative Policy Optimization (GRPO) across task difficulty, student and teacher size, domain, and optimization choices, measuring held-out accuracy against training FLOPs. With an external post-trained teacher, OPD generally loses to GRPO in accuracy per training FLOP at matched settings, even when the teacher is further trained with GRPO, and often suffers response-length inflation. Yet a different teacher changes the picture: when the teacher is the student's own GRPO checkpoint, OPD recovers that checkpoint's accuracy on math with $50\\times$ fewer distillation FLOPs than GRPO needs to reach the same accuracy. Following the same teacher setting, we consistently observe this high efficiency with a larger student, on code, and in a second model family. On a single domain, however, the GRPO checkpoint is already the desired model, so distilling it adds to total compute. Across domains, separate GRPO checkpoints hold different capabilities, and no single checkpoint serves every domain. Multi-teacher OPD (DeepSeek-AI, 2026) consolidates per-domain GRPO experts into a single student that matches each expert's accuracy, with the distillation stage costing only 5.2% (on 2 domains) and 8.0% (on 4 domains) of the specialist training FLOPs. Counting specialist training and distillation together, this pipeline reaches joint GRPO's performance on the 2-domain mix with 42.0% fewer total FLOPs.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 69
+ },
+ {
+  "id": "2611.10469",
+  "title": "Hibana: Fast Agentic Inference on Unified-Memory Devices",
+  "abstract": "Local AI promises capable personal assistants that run on users' own devices, keeping data and computation under their control. Open-weight models that fit on local devices can now handle practical tasks such as coding. Yet current inference engines fall short. Popular engines such as vLLM and SGLang target datacenter GPUs with dedicated host memory, while local engines underuse the memory hierarchy of unified-memory devices. We present Hibana, an inference engine for unified-memory devices that co-optimizes model representation, memory management, and decoding strategy. Model surgery, the process of editing a trained model's architecture to suit its hardware, changes how the model computes, shrinking its memory footprint and data movement. Unified-memory management preserves each agent's state across turns, so long-running agents can resume instantly instead of recomputing their state. Adaptive speculation generates several tokens per step. Hibana codesigns these features around the shared memory capacity and limited bandwidth of unified-memory systems-on-chip to support local multi-agent workloads. On a single DGX Spark serving Qwen and Nemotron models of up to 125B parameters, Hibana completes up to 3.4$\\times$ more agentic tasks per hour and delivers up to 3.9$\\times$ higher decoding throughput than other established frameworks such as vLLM, NVIDIA Flare, llama.cpp, and TensorFold. Code is available at https://github.com/sharar-project/hibana.",
+  "published": "2026-11-07",
+  "updated": "2026-11-07",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 69
+ },
+ {
+  "id": "2611.13578",
+  "title": "POEM: Output-Relative Block-Sparse Attention for Long-Context Prefilling",
+  "abstract": "Large language models (LLMs) have shown strong capabilities across diverse applications, making both safety and utility essential for reliable deployment. Jailbreak attacks use diverse forms of adversarial prompting to bypass alignment safeguards and induce LLMs to generate harmful responses. Some representation-based defenses regulate internal activations using predefined steering directions or learned safety regions. However, adapting intervention to each input without a predefined representational target while limiting over-refusal remains a challenge. In this paper, we propose Target-free Entropy-guided Residual Modulation (TERM), an inference-time defense that uses prompt-calibrated attention entropy deviations to guide adaptive modulation of the model's own residual updates. Attention patterns vary across prompts and decoding steps, making raw entropy values difficult to interpret as a consistent signal for intervention. We therefore calibrate attention entropy against each prompt's own prefill baseline to establish an input-specific reference for reducing unnecessary intervention on benign requests. Adaptive scale normalization and temporal accumulation then account for differences in deviation scale and persistence to determine intervention strength. The resulting signal controls bounded scaling of the model's own residual updates, without relying on a predefined safety direction. We compare our method with seven defenses on seven jailbreak attacks and two over-refusal benchmarks across Llama, Qwen, and Gemma models, including Qwen3 models from 0.6B to 32B. Results show our method improves jailbreak robustness while maintaining low over-refusal on benign safety-sensitive requests with modest inference overhead.",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.CR",
+   "cs.CL",
+   "cs.CR"
+  ],
+  "score": 69
+ },
+ {
+  "id": "2610.36811",
+  "title": "Weakness Localization Is Not Enough: State-Aware Recursive Knowledge Improvement for Large Language Models",
+  "abstract": "Knowledge improvement in large language models is shifting from predefined knowledge incorporation pipelines toward evaluation-guided updating. Existing methods use evaluation to localize model-specific knowledge weaknesses and guide targeted post-training. However, identifying what to improve does not necessarily provide sufficient information for deciding how to improve it. The same localized weakness can be compatible with distinct operational knowledge states: the relevant knowledge may be unavailable, available but difficult to access reliably, or accessible but ineffective for downstream use. We call this ambiguity knowledge-state aliasing. When compatible states favor different interventions, greater diagnostic resolution alone is insufficient for intervention selection. Moreover, model updates can change the underlying knowledge state before the observed weakness disappears, such that an intervention appropriate in one round may no longer address the bottleneck in the next. To address these challenges, we propose Recursive Knowledge Improvement (RKI), which formulates knowledge improvement as a sequential, state-aware intervention process. RKI organizes knowledge into graph-structured units that provide a shared basis for diagnostic evaluation and targeted intervention across rounds. At each round, RKI localizes knowledge weaknesses, estimates the model's operational knowledge state from diagnostic evidence and intervention history, selects a corresponding intervention, and re-evaluates the updated model before determining the next intervention. On HotpotEval and SafeInternalEval, RKI outperforms existing knowledge incorporation methods by 18.41 points on average. Further analyses show that knowledge states provide additional guidance for intervention selection beyond weakness localization and can change across model updates even when the observed weakness persists.",
+  "published": "2026-10-27",
+  "updated": "2026-10-27",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 68
+ },
+ {
+  "id": "2610.37041",
+  "title": "Guided-RLVR: Guided Exploration in Reinforcement Learning with Verifiable Rewards",
+  "abstract": "Reinforcement learning with verifiable rewards (RLVR) has shown strong empirical gains in improving the reasoning ability of large language models (LLMs) on tasks such as mathematics and programming. However, recent studies have shown that RLVR rollouts often collapse onto a narrow set of reasoning trajectories, limiting the explored reasoning space. Motivated by findings that thinking tokens at critical steps serve as critical structural elements in LLM reasoning pathways, we propose Guided-RLVR, a novel approach that augments RLVR with a lightweight controller. The controller strategically injects semantically meaningful steering tokens into the sampling distribution, encouraging the model to approach problems from multiple reasoning perspectives and thereby expanding the exploration space. Experiments on mathematical reasoning and code generation benchmarks show that Guided-RLVR consistently outperforms existing RLVR methods while producing more diverse reasoning trajectories.",
+  "published": "2026-10-27",
+  "updated": "2026-10-27",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.AI"
+  ],
+  "score": 68
+ },
+ {
+  "id": "2611.07899",
+  "title": "Persistent Retrieval for Conversational Agents: A Study of Retrieval Efficiency",
+  "abstract": "Conversational agents can retrieve information directly or delegate retrieval to a subagent. This design choice affects how retrieval history is maintained, what context each model call receives, and what information must be re-retrieved in follow-up questions. We compare three designs: skill-based retrieval in the main agent, a non-persistent retrieval subagent that generates a findings response, and our persistent retrieval subagent, which maintains retrieval history across turns and returns retrieved evidence directly to the main agent. Our approach also allows the main agent to request corrections from the same subagent. We evaluate the three designs on enterprise questions posed independently, within shared conversations, and as dependent follow-ups. Across five multi-turn settings, our approach uses 43.3% fewer recorded agent-model tokens and incurs 45.0% lower estimated API cost than skill-based retrieval, while reducing average response time by 9.1%. Compared with non-persistent retrieval, it reduces response time by 15.6 seconds per question, while using 65.1% more tokens and incurring 29.1% higher estimated API cost. Our approach shifts the retrieval subagent from producing synthesized responses to maintaining retrieval state and supplying evidence that the main agent can directly evaluate and use for answer generation.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.IR",
+   "cs.AI"
+  ],
+  "score": 68
+ },
+ {
+  "id": "2611.12311",
+  "title": "MNN-Pocket-0.3B Technical Report",
+  "abstract": "This technical report presents MNN-Pocket-0.3B, a compact 300M-parameter dense language model designed for efficient on-device deployment and supporting context lengths of up to 32K tokens. With an INT4 deployment footprint of only 173 MB and decoding throughput of up to 466 tokens/s on iPad Pro M5 (Metal), it can be seamlessly integrated into applications on edge devices such as smartphones and smart glasses. MNN-Pocket-0.3B is developed through the co-design of its architecture, data, training pipeline, and inference system. Hardware-aware architecture selection and dependency-aware vocabulary pruning balance model capability with on-device memory and compute constraints. A four-stage pre-training pipeline covering approximately 4.1 trillion high-quality Chinese and English tokens equips the model with broad knowledge and reasoning capabilities. This is followed by a three-stage post-training pipeline comprising instruction fine-tuning, multi-teacher on-policy distillation, and quantization-aware training. Finally, hardware-specific optimizations in the MNN inference engine enable fast, memory-efficient inference and long-context processing. Extensive evaluations demonstrate that MNN-Pocket-0.3B achieves frontier-level performance among models of comparable size, with particularly strong results in Chinese and English knowledge and reasoning, mathematics, coding, and instruction following. It consistently outperforms similarly sized open-source models and even surpasses several 0.5B-parameter models on instruction-following benchmarks. We release MNN-Pocket-0.3B with open weights and ready-to-use MNN deployment packages. We hope it will provide a practical foundation for capable, responsive, and memory-efficient edge applications while advancing research and development in on-device language models.",
+  "published": "2026-11-09",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 68
+ },
+ {
+  "id": "2611.02637",
+  "title": "Variable names provide priors: semantic grounding enables data-efficient numerical prediction by large language models",
+  "abstract": "Large language models (LLMs) have achieved strong performance across diverse tasks, from question answering to code generation. Recent studies have found that LLMs can perform numerical prediction on tabular datasets via in-context learning. However, it remains unclear under what conditions and how LLMs use variable names and in-context examples for numerical prediction. Here we show that semantic grounding, the match between variable names and the values they describe, allows five LLMs without task-specific training to match or outperform seven supervised machine learning (ML) models across 20 datasets from nine scientific domains, particularly when examples are scarce. Reasoning traces indicate that variable names allow LLMs to draw on domain-specific knowledge acquired during pretraining. Using controlled tasks based on physical formulas, we further show that LLMs integrate domain-specific knowledge with in-context examples in a way consistent with Bayesian updating. Specifically, when the relationship between the inputs and the target cannot be inferred from the examples alone, LLMs rely on domain-specific knowledge as the prior. Conversely, as contradicting examples accumulate, LLM predictions shift progressively towards these examples, which act as the likelihood. Our work reveals how LLMs use domain-specific knowledge in numerical prediction and positions them as data-efficient predictors for data-scarce scientific domains.",
+  "published": "2026-11-02",
+  "updated": "2026-11-02",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.LG",
+   "cs.AI"
+  ],
+  "score": 67
+ },
+ {
+  "id": "2611.09075",
+  "title": "Large Language Model Deployment on Resource-Constrained Edge Devices: A Practitioners Survey",
+  "abstract": "Large Language Models (LLMs) have transformed many areas of artificial intelligence (AI), but their substantial resource requirements limit their deployment on mobile and edge devices. Although LLMs have demonstrated impressive capabilities in various applications, the next challenge is deploying these models on resource-limited edge devices. Recent innovations in software optimizations and specialized hardware have made it feasible to deploy LLMs on edge devices. Edge deployment offers benefits including local data processing, cost savings, reduced latency, and personalized responses. This paper reviews the latest techniques that make the deployment of LLMs on edge devices feasible.",
+  "published": "2026-11-06",
+  "updated": "2026-11-06",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 67
+ },
+ {
+  "id": "2611.04313",
+  "title": "Coarse Semantic Blocks for Efficient Training-Free Sparse Attention",
+  "abstract": "We introduce a training-free sparse attention method that builds a prompt-specific key index to accelerate both prefill and decoding. The method clusters the keys into large semantic blocks that group tokens from noncontiguous positions. Each query position selects blocks by scoring their centroids and attends to the original keys and values within them. Queries that select the same block are processed together, so prefill stays fast even though each query chooses its own blocks. Large blocks make centroid scoring and this grouped processing cheap, so each query can attend to more tokens in the same time. Larger blocks with a larger token budget can thus be both faster and more accurate on long-context tasks than smaller blocks with a smaller budget. We evaluate two hybrid LLMs, Qwen3.5-4B and 35B-A3B, on one NVIDIA H200. Including the cost of building and using the index, whole-model wall-clock speedups over dense attention are 2.3-2.4x for prefill and 1.7-2.0x for decoding at 512K tokens, and 2.9-3.0x for prefill at 1M. The 35B-A3B model stays close to dense attention on five RULER tasks through 1M, on LongBench-v2 overall, and on MRCR through 256K. The 4B model loses accuracy mainly on multi-key retrieval, yet outperforms dense Qwen3.5-2B, whose latency is similar at 512K, on all three benchmarks.",
+  "published": "2026-11-03",
+  "updated": "2026-11-03",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 66
+ },
+ {
+  "id": "2610.32474",
+  "title": "Beyond Post-Hoc Rewards: Privileged Reasoning Exploration for Multimodal Embeddings",
+  "abstract": "Advances in Multimodal Large Language Models (MLLMs) have driven substantial progress in multimodal embeddings. Recent methods exploit generative capabilities by augmenting embedded inputs with self-generated reasoning to produce more informative embeddings. However, conventional retrieval supervision for training embedding models specifies pairwise relevance relations without explicitly guiding the reasoning used for input augmentation. Such reasoning is neither directly observed nor uniquely determined by the input, allowing multiple plausible traces to introduce semantic cues of varying retrieval utility. Existing approaches largely optimize reasoning conditioned on the input alone, limiting the exploration of retrieval-relevant traces. We introduce PILOT, a framework that models reasoning as a latent variable and instantiates its prior and posterior distributions as distinct reasoning modes of a shared MLLM. The prior conditions only on the input, whereas the posterior uses additional training-time relational evidence to guide reasoning exploration. To translate the posterior's broader exploration into inference-time improvements, we derive an importance-weighted variational objective and instantiate it as a prior-posterior co-evolution framework that improves both modes under a shared inference-compatible reward while selectively transferring posterior trajectories to the prior according to their utility and prior reachability. On the 78-task MMEB-V2 benchmark, PILOT outperforms the primary baseline across all 12 task groups at both 2B and 7B parameters, improving overall scores by 3.2 and 3.3 points, respectively, with the largest gains in visual-document retrieval (+6.1 and +6.4 points). Our results show that relational supervision is most valuable not as a post-hoc reward but as a signal for shaping how reasoning is explored in training reasoning-enhanced embedding models.",
+  "published": "2026-10-23",
+  "updated": "2026-10-23",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.AI"
+  ],
+  "score": 65
+ },
+ {
+  "id": "2610.37826",
+  "title": "DeFT-RAG: Decomposing Multi-Hop Questions into Self-Contained Sub-Questions with Reusable Answers",
+  "abstract": "Retrieval-augmented generation (RAG) lets a large language model (LLM) answer questions by retrieving relevant passages from a large corpus. However, RAG struggles with multi-hop questions, which require chaining facts spread across several documents through intermediate entities that the question never mentions. Graph-based RAG methods retrieve once from the entities a question names and so rarely recover the full evidence chain. Iterative RAG methods recover it step by step, but their accuracy is limited by the many tasks they ask the LLM to perform, such as planning the sub-questions, deciding their dependencies, rewriting them as answers arrive, and keeping track of what is known. We propose DeFT-RAG, a RAG framework built on three components. First, DeFT-RAG generates one self-contained sub-question at a time from the original question and the sub-questions answered so far with their answers (QA pairs). Each sub-question names every entity it asks about, which removes the need to plan, track dependencies or rewrite, and lets the LLM focus on a single fine-grained task at a time. Second, DeFT-RAG moves the remaining LLM work outside the LLM: rule-based updates to a QA table that keeps track of what is known, and yes/no decisions made by a fine-tuned lightweight decision model. Third, DeFT-RAG caches the QA pairs and reuses an answer when a later question asks a sub-question with the same meaning. On MuSiQue, 2WikiMultiHopQA and HotpotQA, DeFT-RAG achieves the best accuracy among thirteen baselines with both gpt-4o-mini and Qwen3.6 as the backbone, while giving the LLM fewer input tokens than any other iterative method. With a QA cache shared across 1,000 MuSiQue questions, 23.1% of sub-questions are answered from the cache, which reduces LLM calls by 12.9% without lowering accuracy.",
+  "published": "2026-10-27",
+  "updated": "2026-10-30",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.IR",
+   "cs.CL"
+  ],
+  "score": 65
+ },
+ {
+  "id": "2611.07263",
+  "title": "HyFlash: A Prefix-Memory Prior for On-Device Speculative Decoding",
+  "abstract": "Parallel block drafting accelerates speculative decoding by predicting multiple future positions in a single backbone pass, but on-device deployment constrains both drafter capacity and context storage. Under tight memory budgets, drafters must model long-range dependencies and fine-grained draft-position interactions without the growing KV-cache overhead of full-context attention. We propose HyFlash, a compact parallel drafter that introduces a prefix-memory prior to separate long-range context modeling from fine-grained draft-position interactions with limited capacity. Local attention captures recent context and draft-position interactions, while recurrent memory compresses historical target features into fixed-size states. This inductive bias enables effective local and long-range modeling with bounded draft-side memory. Experiments show that HyFlash achieves higher acceptance than full-context attention with substantially less KV storage and with larger gains for shallow drafters and long contexts.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 65
+ },
+ {
+  "id": "2611.11232",
+  "title": "TLRS-DPO: Token-Level Risk Scoring for Better Direct Preference Optimization",
+  "abstract": "Direct Preference Optimization (DPO) is a simple and widely used alternative to RLHF for aligning large language models (LLMs), but its sequence-level objective cannot precisely locate or suppress the local patterns that make an otherwise acceptable response unsafe or undesirable. We propose TLRS-DPO (Token-Level Risk Scoring for Better Direct Preference Optimization), which augments DPO with fine-grained token-level control while remaining fully offline and reference-based. TLRS-DPO introduces a token-level robust compensation term that converts the policy-reference log-ratio on rejected responses into localized risk scores, a curriculum-style schedule that gradually increases the strength of this compensation during training, and a risk-adaptive screening mechanism that selectively penalizes only high-risk tokens instead of entire sequences. This design bridges sequence-level preference fitting and token-level behavior control, and can be implemented as a drop-in modification to standard DPO trainers. Empirically, TLRS-DPO improves alignment quality and safety-relevant behavior with minimal impact on helpfulness compared to strong DPO baselines.",
+  "published": "2026-11-08",
+  "updated": "2026-11-08",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 65
+ },
+ {
+  "id": "2611.13552",
+  "title": "How Post-Training Influences Verbalized Algorithmic Computation in Language Models",
+  "abstract": "Post-training improves language-model reasoning, but how it changes the use of internal information and verbalized chain of thought (CoT) remains unclear. We study successive SFT, DPO, and RLVR checkpoints of Olmo-3-7B-Instruct on multi-digit addition, using carry values as known intermediate state. Probes recover carry information from internal activations with similar accuracy in SFT and RLVR, although manipulating this information does not reliably control model outputs. In contrast, the usefulness of verbalized reasoning differs: CoTs produced by RLVR yield higher accuracy across receiving checkpoints than those produced by SFT or DPO. We also show that carry-related statements receive higher importance scores after RLVR than matched random controls. DPO shows similar sensitivity to carry-related statements but without comparable accuracy gains. These results suggest that post-training changes the usefulness of written reasoning and sensitivity to its content in meaningful ways, although greater sensitivity does not necessarily coincide with better problem performance.",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 65
+ },
+ {
+  "id": "2610.34281",
+  "title": "Transformer to GPT-5: Advancements, Limitations, and Future Directions in Large Language Model Design",
+  "abstract": "Large Language Models (LLMs) have revolutionized Artificial Intelligence (AI) by their extraordinary capabilities, like contextual understanding, few-shot/zero-shot learning, code generation, ability to reason and problem-solving. Recent studies have shown immense work on LLMs. Yet, there is limited work on the thorough taxonomy of LLMs. This study would showcase a detailed classification of LLMs, starting with the earlier models like BERT and leading to LLMs like GPT, Gemini, Claude and Grok. We would delve into topics like datasets used to train LLMs, computational power used during training, their hardware specifications, architecture and parameters. Further, we would also look at the limitations, computational challenges and open problems as well. This study would primarily focus on the timeline of LLMs, signifying their growth over the period. Findings reveal a clear pattern: models that optimize the ratio between architectural complexity and data quality exhibit stronger reasoning stability and better alignment, without proportionally increasing the computational load. This desired balance between scaling and sustainability is the defining characteristic of the current generation of AI.",
+  "published": "2026-10-25",
+  "updated": "2026-10-25",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 64
+ },
+ {
+  "id": "2610.36991",
+  "title": "SpectRAG: Weighted Chunk Graphs for Token-Budgeted Context Selection in Multi-Hop Retrieval-Augmented Generation",
+  "abstract": "Retrieval-augmented generation (RAG) systems ground large language models (LLMs) by retrieving external evidence and conditioning generation on the retrieved context. Although dense retrieval is effective for local semantic matching, independently ranked retrieval can return redundant passages, miss cross-chunk dependencies, and provide incomplete evidence for multi-hop reasoning. We propose SpectRAG, a spectral graph-augmented retrieval framework that combines hybrid candidate seeding, weighted chunk graph construction, graph-based expansion, spectral relevance propagation, and token-budgeted context selection. Document chunks are represented by dense semantic embeddings and graph-spectral coordinates derived from a weighted chunk graph whose edges encode semantic similarity, document adjacency, section hierarchy, shared entities, citation links, and similarity between LLM-generated utility questions. At query time, SpectRAG builds a high-recall seed set using exact inner-product search and hybrid relevance signals, expands it over the chunk graph, re-scores candidates using graph proximity and spectral information, and assembles the final context under a fixed token budget. The goal is not merely to retrieve individually similar chunks, but to construct a context that is relevant, diverse, structurally connected, and sufficient for grounded reasoning. Experiments on MultiHopRAG, UltraDomain, and long-document question-answering settings show that SpectRAG improves broad evidence recovery and achieves competitive generation quality against dense, hybrid, HyDE, LightRAG, and NaiveRAG baselines. The results further indicate that graph-spectral structure is particularly useful for inference-oriented and cross-document retrieval, while highlighting trade-offs in early precision, computational cost, and domain-dependent performance.",
+  "published": "2026-10-27",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.IR",
+   "cs.AI"
+  ],
+  "score": 64
+ },
+ {
+  "id": "2611.07486",
+  "title": "MEvince: Knowledge-Constrained LLM Reasoning for Technique Identification from Malware Reports",
+  "abstract": "Mapping behavioral intelligence in malware analysis reports to ATT&amp;CK techniques supports threat analysis and defense, but reliable identification remains challenging. Supporting evidence is often scattered across long, heterogeneous reports, while closely related techniques share behavioral cues and differ only in subtle but decisive details. While large language models (LLMs) can use external knowledge to interpret reports, they may assign techniques based on plausible associations rather than sufficient evidence. We present MEvince, a knowledge-constrained LLM reasoning framework for report-level malware technique identification. Its core is a shared behavioral representation connecting report observations to technique definitions. This representation is built through agentic mining of technique documentation and supports two online stages: 1) primitive-guided extraction uses behavioral primitives to structure LLM-extracted observations, link them to source passages, and group dispersed evidence; 2) evidence-aligned retrieval matches this evidence to technique profiles through the same concepts, retaining likely candidates and confusable alternatives for LLM comparison of distinguishing behaviors. Controls at both stages validate evidence references and check technique-specific requirements. The representation also supports adaptation without parameter updates, where offline agentic audits diagnose concept weaknesses and refine extraction or retrieval policies. We evaluate MEvince against 11 baselines spanning four method families using a dataset of 610 public malware reports referenced by MITRE ATT&amp;CK. MEvince improves exact-ID F1 over the strongest baseline by 17.4%, and its concept-guided retrieval increases gold-label candidate coverage from 31.6% to 47.9%. With a small adaptation set, offline refinement yields further gains and outperforms baselines that update model parameters.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CR",
+   "cs.CL",
+   "cs.IR",
+   "cs.CR"
+  ],
+  "score": 64
+ },
+ {
+  "id": "2611.08752",
+  "title": "AttentionSwitch: Jailbreak Defense for LLMs via Joint Learning of Sparse Attention-Head Selection and Scaling",
+  "abstract": "Large language models have achieved remarkable performance across a wide range of tasks, yet they remain susceptible to jailbreak attacks that circumvent safety mechanisms and elicit harmful or unintended outputs. Although safety can be improved through model fine-tuning, such approaches can be computationally expensive and may degrade previously acquired capabilities through catastrophic forgetting. Recent jailbreak defenses have therefore explored targeted interventions on specific model components associated with unsafe behavior. However, existing approaches typically decouple two inherently related decisions: where to intervene and how to modify the selected components. Such sequential optimization may be suboptimal because the optimal intervention location can depend on the intervention applied there, and vice versa. In this work, we introduce AttentionSwitch, the first jailbreak defense to jointly optimize intervention sites and strengths within a frozen LLM. Specifically, AttentionSwitch learns a sparse set of attention heads together with query-conditioned multiplicative scaling factors, allowing the outputs of the selected heads to be either attenuated or amplified without altering the directions of their representations. Across popular language models and jailbreak attacks, AttentionSwitch outperforms existing defenses, with particularly strong results when training data is scarce.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.CR",
+   "cs.AI"
+  ],
+  "score": 64
+ },
+ {
+  "id": "2611.11223",
+  "title": "SGA-Sparse: Training Native SwiGLU Gates for Activation-Sparse and Low-Bit LLMs",
+  "abstract": "Activation sparsity can reduce FFN weight traffic during single-user LLM decoding, but active channels must be identified early enough to avoid fetching unused weights. In pretrained SwiGLU models, training-free routing with the native gate performs substantially worse than routing with the up activation at high sparsity. We show that this ordering reverses after sparsity-aware training. Based on this insight, we introduce SGA-Sparse, which converts pretrained SwiGLU LLMs into fixed-budget activation-sparse models by training the existing gate projection directly as a top-k router. SGA-Sparse updates all model parameters end-to-end while preserving the original SwiGLU activation and introducing no auxiliary router parameters. After approximately 30B training tokens, LLaMA models from 1B to 8B achieve uniform per-token 75-85% FFN channel sparsity while remaining within 0.2-2.7 pp of their original dense checkpoints in average zero-shot accuracy. Because post-training quantization degrades sparsity-trained checkpoints, we further study two complementary quantization-aware training (QAT) recipes: continued-QAT largely recovers performance at 4-bit weight quantization, while joint-QAT performs better for the more aggressive sub-4-bit target. To compare activation sparsity with dense low-bit quantization, we translate the sparsity-induced reduction in weight traffic into an equivalent bit-width. Under this unified weight-traffic metric, our 2.5- and 1.5-bit-equivalent models establish a new accuracy-traffic Pareto frontier: the 2.5-bit-equivalent models match dense 3-bit QAT accuracy, while the 1.5-bit-equivalent models approach dense 2-bit models and outperform dense ternary models by 1.3 pp on average. These results establish native-gate training as a practical approach for combining high FFN sparsity with low-bit weights.",
+  "published": "2026-11-08",
+  "updated": "2026-11-08",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 64
+ },
+ {
+  "id": "2610.41905",
+  "title": "Completeness and Cost of Retrieval Structures for Multi-Tool Requests in LLM Agents",
+  "abstract": "An agent that must call several tools to fulfill a request fails when the tool retriever omits any one of them, yet tool retrievers are mostly built and evaluated on queries requiring a single tool. We compare representatives of six retrieval structures (flat lexical and dense retrieval, LLM query decomposition, LLM-navigated hierarchies, server-then-tool matching, dependency graphs, and trained set-level retrievers) across two multi-tool testbeds: 345 AppWorld queries with expert dependency labels and 103 MCP-Bench tasks over 257 MCP tools. We measure completeness@k, the share of queries whose entire required tool set appears in the top k, alongside the LLM calls, tokens, and latency that each structure incurs at retrieval time. A motivating analysis on all 7,961 ToolRet queries shows that aggregate completeness mixes two regimes: completeness at 10 is .58 to .67 on single-target queries and .08 to .17 on queries with four or more targets, and the ordering of retrievers on single-target queries reverses on multi-target ones. Across the two testbeds, none of the compared structures that is untrained on the testbed and makes at most one LLM call per query completes more than 10% of AppWorld queries at k = 16. The two structures that do better incur different costs: a set-level retriever trained on 75 to 90 in-domain queries reaches .33 on AppWorld and .58 on MCP-Bench with no LLM calls, while an LLM-navigated hierarchy reaches .30 and .40 with a median of 31 to 38 LLM calls and about five minutes per query. Their failure modes also differ: the trained retriever mostly ranks the missing tools just below the cutoff, whereas the hierarchy finds the target API and stops before collecting its prerequisites. In a downstream check with the official AppWorld agent, tasks with a complete retrieved set succeeded 21 of 21 times, whereas incomplete ones succeeded 2 of 39 times.",
+  "published": "2026-10-30",
+  "updated": "2026-10-30",
+  "categories": [
+   "cs.IR",
+   "cs.CL",
+   "cs.IR"
+  ],
+  "score": 63
+ },
+ {
+  "id": "2611.07959",
+  "title": "CoRD: Coupled Rollouts Fill the Blind Spot of On-Policy Distillation",
+  "abstract": "On-policy distillation trains a student on its own rollouts, so states the teacher would reach but the student does not are seldom supervised. We introduce CoRD (coupled-rollout distillation), which keeps the on-policy loss and moves only the distribution of training states toward the teacher, drawing rollouts from a geometric interpolation of student and teacher through the maximal coupling of speculative decoding. The coupling keeps the student's token wherever the two distributions agree and otherwise substitutes a token from the part of the target the student underweights, so interventions are as rare as any exact sampler allows and recede as the student learns. Across six base students from two model families (Qwen3 and Qwen3.5, 0.6B to 4B), CoRD raises average pass@1 over on-policy distillation by 0.9 to 2.0 points and pass@8 by 1.2 to 3.4 points on five public math benchmarks at equal steps and data. On frozen teacher-reached states, a 4B student trained with CoRD reaches in 16 steps a gap closure that on-policy distillation does not reach in 80, and substitution rules intervening at least as often in other directions fall short of CoRD.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 63
+ },
+ {
+  "id": "2611.07988",
+  "title": "Compression Through a Context Lens: Evaluating Adaptation, Quantization, and Distillation in Arabic Legal LLMs",
+  "abstract": "Model compression can facilitate the deployment of large language models in resource-constrained legal settings, but its effects on domain-specific performance may depend on the evaluation protocol. We investigate this issue using ArabLegalEval, a Saudi Arabic legal benchmark, under both with-context and no-context evaluation. The former provides supporting legal passages, while the latter assesses performance without external context. Removing the context produces accuracy gaps of up to 27 percentage points for the base model. We examine three stages: domain adaptation, quantization, and knowledge distillation across FANAR-9B, JAIS-8B, and Qwen2.5-7B. Four-bit quantization reduces model memory by 64-71%, with changes in no-context MCQ accuracy ranging from -3.2 to +1.6 percentage points. Distillation produces more variable results, with accuracy generally declining as student size decreases. A Qwen2.5-7B student distilled from FANAR achieves 76.6% no-context accuracy, compared with 77.2% for its teacher. Our findings suggest that no-context evaluation provides a useful complement to context-supported testing when assessing the effects of adaptation and compression on Arabic legal language models.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 63
+ },
+ {
+  "id": "2611.08219",
+  "title": "Agent-R$^2$: Scaling Agents for Realistic Productivity Work via Real-Source Data Synthesis",
+  "abstract": "Large language models have made rapid progress in agentic reasoning and tool use, raising expectations for agents that can take over realistic productivity work from humans. However, current agents still struggle to finish such tasks, where success requires following long-horizon professional workflows, understanding heterogeneous file contexts, and producing usable deliverables under fine-grained requirements. A key bottleneck is the lack of scalable post-training data that reflects real work intent, authentic file environments, and deliverable-level evaluation. To close this gap, we introduce Agent-R$^2$, a $\\textbf{r}$eal-source data synthesis framework that scales training data for $\\textbf{r}$ealistic productivity work. Instead of relying on manually specified workflows or LLM-generated files, Agent-R$^2$ grounds synthesis throughout the pipeline in real occupational seeds, corpus-derived workflow evidence, and authentic web-sourced files. From 10k web-corpus candidates, Agent-R$^2$ distills 4k task instances that pair real multi-format attachments with fine-grained, deliverable-level rubrics. On this data, we train Agent-R$^2$-4B via supervised fine-tuning and rubric-based reinforcement learning, improving both end-to-end productivity performance and file-grounded reasoning. Trained on only 4k instances, Agent-R$^2$-4B surpasses Qwen3-235B-A22B-Thinking-2507 on both GDPval (51.0$\\%$ vs. 48.0$\\%$) and OfficeQA (14.8$\\%$ vs. 13.8$\\%$). Further analysis shows that Agent-R$^2$ mitigates shortcut behavior, where agents produce superficially plausible deliverables before sufficiently grounding, constructing, or verifying them, while promoting sustained exploration.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 63
+ },
+ {
+  "id": "2610.33511",
+  "title": "Towards a Learnable Retriever for Textual Graph Question Answering",
+  "abstract": "Textual graph question answering (GraphQA) and graph-based retrieval-augmented generation (GraphRAG) have gained increasing attention as a way to ground large language models (LLMs) on structured knowledge. Despite extensive efforts, existing methods still face two key gaps. The first is an architectural gap: existing methods typically fine-tune an LLM-based generator, but do not also make the retriever itself a learnable LLM for graph evidence selection within one end-to-end retrieve-then-generate pipeline. The second is a retrieval-supervision gap: existing retrievers rarely use gold answer signals to supervise evidence selection. As a result, they may fail to recall evidence nodes required for reasoning, resulting in insufficient coverage of the gold answer set; meanwhile, naive attempts to boost recall often introduce excessive irrelevant information that compromises compactness and overwhelms the LLM. To address these gaps, we propose TaLenT, an LLM-based end-to-end retriever-generator framework for textual GraphQA. To bridge the architectural gap, TaLenT pairs a learnable LLM-based retriever for evidence selection with a fine-tuned LLM-based generator within one unified retrieve-then-generate pipeline. To bridge the retrieval-supervision gap, we leverage gold answer signals as retriever supervision. Specifically, we stratify graph nodes into gold answers, answer-related nodes, and irrelevant noise. We then adopt a weighted pseudo-label loss to prioritize gold answers and preserve answer-related nodes for coverage, while discarding irrelevant noise for compactness. Experimental results across three GraphQA datasets demonstrate that TaLenT consistently improves downstream performance.",
+  "published": "2026-10-24",
+  "updated": "2026-10-24",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2610.34949",
+  "title": "Correlation-Aware Exploration for Long-Trace Reasoning",
+  "abstract": "Reasoning models trained with Group Relative Policy Optimization (GRPO) now produce chains of thought thousands of tokens long, and recent studies reveal that such training is prone to policy collapse. Entropy regularization is the standard remedy, but it works by pushing probability mass away from the few tokens that carry it and toward the vast low-probability tail of the vocabulary, and it applies this force once for every token of the reasoning trace. This puts the bonus in direct conflict with the entropy decay that convergence requires, and makes its coefficient difficult to set in the long-trace regime. To resolve this tension, we propose Info-GRPO, an information-theoretic framework that cultivates correlation between the policy and a latent prior. Rather than raising entropy everywhere, Info-GRPO builds on the mutual information between a latent variable and the trajectory it induces: augmenting prompts with latent seeds during training lets the model explore diverse policies correlated with the prior, while the seed-conditioned entropy is guided toward convergence. Diversity is therefore carried across whole reasoning traces rather than by per-token randomness, and exploration no longer fights entropy reduction. Experiments show that Info-GRPO outperforms vanilla GRPO and entropy-regularized GRPO across diverse reasoning benchmarks. On AIME24, it improves $Avg@8$ over GRPO by 3.75%, 1.66%, 4.16%, and 4.17% on four backbones, and it reaches the same majority-vote accuracy with $8\\times$ fewer samples. Code and models will be publicly released.",
+  "published": "2026-10-26",
+  "updated": "2026-10-26",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2610.36520",
+  "title": "Folding Attention Biases into Keys Makes Compacted KV Caches Run on Standard Kernels",
+  "abstract": "Attention Matching (AM) compacts a KV cache by keeping some keys per head, refitting their values and adding a bias to each kept key's logit. FlashAttention and vLLM's paged caches have no input for it. We fold the bias into the keys along one closed-form direction per head, fitted on context queries, giving a plain cache with AM's size and head dimension and the model's own query path; the output error is bounded by how far each query's projection on that direction is from 1. With equal per-head budgets, unmodified vLLM serves folded caches through a KV connector, matching Hugging Face's answers on all 51 Qwen3-4B questions and its greedy output on 180 of 200 Qwen3-14B LongBench samples. With equal budgets on QuALITY (Qwen3-1.7B, 4B, 8B, Llama-3.1-8B) and LongHealth (three Qwen3 models), the fold is within noise of AM's accuracy in 13 of 14 settings, with lower KL to the full cache than dropping the bias in all 12 where both ran. Under the published per-head budgets, on Qwen3-4B, its Instruct-2507 variant and Llama-3.1-8B, it is within noise of AM in 9 of 10, no longer beats dropping the bias in KL, and the two each win once in accuracy.",
+  "published": "2026-10-27",
+  "updated": "2026-10-27",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2610.40943",
+  "title": "Kernel-based Interpolatory Methods for Context Compression of Attention Mechanisms",
+  "abstract": "The bottleneck of attention mechanisms, which are the fundamental building block of modern language models, is their quadratic complexity in terms of context size. There has thus been an increasing interest in the compression of the context, also called KV-cache compression. In this article, we consider the problem of compressing the context of attention mechanisms by first formulating it in the Hilbert space associated with its kernel. In this formalism, attention can be represented as the ratio of two linear maps whose interpolant is also the ratio of interpolants, this allows us to consider the interpolation of the linear maps directly. We thus introduce two novel KV-cache compression methods which we call GAIM and Q-DAIM, based on the Generalized Empirical Interpolation Method (GEIM) and the Q-Discrete Empirical Interpolation Method (Q-DEIM), respectively. As the cost of these methods is quadratic in terms of context length, we propose surrogate models based on the Taylor series, the Performer and the Random Fourier Features method which allow the compression to be done in linear time. Finally, we extend this result to the streaming attention setting, providing new methods which allow one to penalize the selection of interpolation nodes based on the previously interpolated context and to update the previous interpolation based on new information. We then provide numerical results on the convergence of the residuals and the output error in future queries and preliminary results on the LongBench-E benchmark showing performance comparable to the state-of-the-art methods. These experiments suggest that the range revealed by our Q-DAIM method could help identify where information is concentrated in the KV cache, thus enabling an efficient compression.",
+  "published": "2026-10-29",
+  "updated": "2026-10-29",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "math.NA",
+   "cs.LG"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2611.02746",
+  "title": "Replay for LLM Continual Learning with Multi-Teacher On-Policy Distillation",
+  "abstract": "Multi-teacher on-policy distillation (MOPD) distills several domain experts into one student and is used in the post-training of recent large language models. It trains on all domains at once, so every expert must be available at the same time. In practice, capabilities often arrive one after another, and the experts of earlier domains may be gone when a new domain is learned. Distilling the experts in sequence then suffers from catastrophic forgetting of the earlier domains. Some recent pipelines store a snapshot after every stage and end with a multi-teacher recovery stage taught by all snapshots. The number of stored models then grows with the number of stages. Different from these pipelines, this paper formulates continual MOPD by what is kept from earlier stages and studies replay toward the previous student. Inside every stage, prompts of earlier domains are replayed with the student of the previous stage as their teacher, so neither earlier experts nor stage snapshots are kept. Two design choices of replay are explored. The replay budget of a stage is either shared among the earlier domains or fixed per earlier domain. Replay steps either distill the token distribution alone or add alignment of hidden states, region-pooled self-attention scores and value relations. A five-domain benchmark of logic, math, code, safety and instruction following is built from public experts of one 1.5B student. Experiments on its 14 benchmarks show that, without storing any snapshot, replay toward the previous student closes most of the gap between sequential distillation and joint MOPD. With a fixed replay share per earlier domain, it performs on par with recovery from all stored snapshots.",
+  "published": "2026-11-02",
+  "updated": "2026-11-03",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2611.05919",
+  "title": "Routes of Reasoning: Reading and Reshaping Test-Time Compute in MoE Models",
+  "abstract": "Reasoning models allocate test-time compute across distinct behaviors such as planning, deriving, and verifying. However, models frequently \"overthink,\" continuing to verify and re-derive long after finding a correct answer. This wastes expensive compute and can even degrade performance. Existing interventions, such as token budgets or steering, primarily regulate reasoning duration rather than targeting specific behaviors. In this work, we demonstrate that Mixture-of-Experts (MoE) routers provide a natural, training-free interface for behavioral control. We first split reasoning traces into sentence-level segments and label each with one of six reasoning behaviors (planning, execution, restatement, fact, reflection, and conclusion), so that every token carries the behavior of its segment. Linear probes on router logits predict this label nearly as well as probes on the residual stream, the model's full hidden state and the standard target for probing, while using about half as many features. These signals generalize: experts associated with a reasoning behavior on one dataset predict the same behavior on the others, across six datasets spanning five domains (math, code, science, knowledge, and commonsense). Building on this, we selectively edit expert router scores during inference to curb overthinking. Across four models and four benchmarks, this intervention reduces the number of generated tokens by a median of 30.4% (and up to 63.3%). Crucially, it encourages the model to stop once the problem is solved, rather than skipping essential reasoning steps. Accuracy never drops by more than 0.5 percentage points, and frequently improves. Ultimately, MoE routing offers both an interpretable lens into reasoning states and a lightweight mechanism for optimizing test-time compute.",
+  "published": "2026-11-04",
+  "updated": "2026-11-04",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.LG",
+   "cs.AI"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2611.06133",
+  "title": "Accelerating Long-Context Decoding in Large-Scale Hybrid LLMs Without Retraining",
+  "abstract": "The full-attention layers of large language models (LLMs) make every generated token more expensive than the previous one, slowing models down on long-context tasks. Hybrid models reduce this cost by replacing most full-attention layers with linear-attention layers, but the first still dominate decoding at long contexts. We accelerate these remaining layers without any training or weight changes using combined sparse attention: each layer attends to a sliding window of recent tokens, a pinned prefix, and a fixed budget of most relevant tokens in the context. The window size and budget are found on a per-layer basis using a multi-objective search algorithm. Across six hybrid models from three families, from 4B to 397B parameters, the selected configurations preserve their baseline model's accuracy on 21 long-context datasets. Decoding 64k/256k tokens becomes up to 1.26x/2.22x faster on Qwen3.5-4B, 1.20x/2.23x on Qwen3.5-122B-A10B, and 1.16x/2.06x on Ornith-1.0-397B.",
+  "published": "2026-11-04",
+  "updated": "2026-11-04",
+  "categories": [
+   "cs.CL",
+   "cs.PF",
+   "cs.CL"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2611.08315",
+  "title": "Benchmarking Large Language Models on Heterogeneous Cognitive and Biomedical Knowledge Graphs: The Role of Graph Grounding in Multi-Hop Reasoning and Hallucination Mitigation",
+  "abstract": "Large language models (LLMs) are increasingly used in biomedical and cognitive neuroscience, but their ability to reason reliably over heterogeneous knowledge graphs (KGs) remains unclear. We benchmark five LLMs (GPT-5.1, Gemini 2.0 Pro, Llama 3, Qwen, and BioGPT) across five KGs: DrugBank, NeuroSynth, Cognitive Atlas, Brain Map, and GDPKG. We introduce a multitier query dataset to evaluate reasoning depth and factual accuracy under KG-aware (graph-grounded) and KG-agnostic conditions. Inter-annotator agreement was substantial, with Cohen's kappa of 0.781 (range: 0.753-0.807) and Fleiss' kappa of 0.77. Results show that general-purpose models, particularly GPT-5.1 and Gemini 2.0 Pro, generally outperform domain-specific models on multi-hop and high-level reasoning tasks, although performance declines as query complexity increases. KG grounding reduces hallucination rates across all evaluated models. Contrary to our initial hypothesis, domain-specific models do not consistently outperform general-purpose models on specialized tasks without graph grounding. These findings highlight the value of combining broad language-model capabilities with structured domain knowledge. We provide practical guidance for selecting LLM-KG integration strategies based on task complexity and computational constraints, and discuss hybrid neurosymbolic architectures for personalized medicine, cognitive disorder diagnosis, and explainable AI.",
+  "published": "2026-11-05",
+  "updated": "2026-11-05",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.LG",
+   "cs.AI"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2611.12016",
+  "title": "Speculative Self-Distillation enables Efficient Knowledge Internalization",
+  "abstract": "Many real-world applications require language models to internalize knowledge that was absent from pretraining, to incorporate continually updated facts, or to learn new domain skills. Self-distillation has emerged as a natural approach for this task. A model conditioned on the source material acts as the teacher, and an unconditioned student is trained to reproduce the teacher's behavior closed-book. We propose Speculative Self-Distillation (SSD), an efficient per-token mixed-policy method for self-distillation. The student generates each rollout by default, while the teacher intervenes only at positions where its next-token distribution substantially diverges from the student's. Unlike off-policy distillation with teacher-generated prefixes, this design keeps training rollouts close to the student's test-time behavior, while avoiding the low-signal states that fully on-policy rollouts drift into. In effect, SSD lets the teacher steer the rollout exactly where the privileged context changes the prediction. On three closed-book QA benchmarks measuring fact recall, knowledge updates, and skill acquisition, SSD nearly matches on-policy distillation while using 38-69% fewer supervised tokens and consistently outperforms off-policy distillation on the held-out test set. On a forgetting stress test, SSD retains the most general capability while also achieving the best in-domain accuracy and using less supervision than the on-policy baseline. Overall, SSD establishes a new accuracy-efficiency-forgetting Pareto frontier for self-distillation.",
+  "published": "2026-11-09",
+  "updated": "2026-11-09",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2611.12240",
+  "title": "Prune, Don't Merge: Expert Compression of Mixture-of-Experts LLMs on Multilingual Production Tasks",
+  "abstract": "Mixture-of-Experts language models are cheap to run per token but expensive to hold in GPU memory, which drives the cost of serving them in production. One-shot expert compression shrinks them after a single calibration pass. Its two current state-of-the-art methods are REAP for expert pruning, which deletes the least salient experts, and REAM for expert merging, which merges them into the most salient ones. Both have been evaluated only on academic benchmarks. We compare the two on five multilingual production tasks of a web-hosting company, from classification to the generation of marketing HTML email templates, with two 30B-parameter models (Qwen3-30B-A3B-Instruct-2507 and the hybrid Mamba-attention Nemotron-3.5-Lightning) at 25% and 50% of experts removed and the same calibration data. Pruning wins: on the same rows, REAP is significantly better in 16 of 20 comparisons and REAM in 2. At 25%, REAP keeps 93.6% of Qwen3-30B's generative quality and REAM 62.5%, although on benchmarks the two are within a point for the same model. The damage concentrates in the output contract rather than the content: 89.8-95.2% of each significant loss on email templates comes from hard-gate failures such as invalid JSON, broken mobile layouts and runaway generation, and most failed non-English domain descriptions copy the prompt's English opening phrase. Cross-perplexity and logit divergence, two diagnostics from the REAP paper, also track production quality, as does the rate of repetition loops; n-gram diversity does not. We close with practical guidance for compressing MoE models for production.",
+  "published": "2026-11-09",
+  "updated": "2026-11-09",
+  "categories": [
+   "cs.CL",
+   "cs.LG",
+   "cs.CL"
+  ],
+  "score": 62
+ },
+ {
+  "id": "2610.34137",
+  "title": "Self-Evolution Reasoner: Continuous Optimization via Policy-Intrinsic Exploration and Exploitation",
+  "abstract": "Reinforcement learning with verifiable rewards (RLVR) enables large language models (LLMs) to continuously self-improve their reasoning capabilities. Compared to RLVR's scalar rewards, recent self-supervised on-policy distillation methods leverage denser supervision signals. However, both paradigms suffer from exploration bottlenecks, struggling to escape local optima when the policy fails to sample valid solutions. Relying on external demonstrations can bypass this issue; however, the off-policy nature hinders genuine self-improvement and the mismatched-distribution reasoning can not be fully exploited. In this work, we propose Self-Evolution Policy Optimization (SEPO), a framework that drives continuous reasoning capability evolution via guided exploration and in-distribution exploitation. Specifically, SEPO utilizes labels to elicit correct reasoning from the policy, unlocking the exploration potential. By treating current policy conditioned on this in-distribution reasoning as a self-teacher, SEPO distills the newly discovered solution back into the policy. Through this iterative cycle of policy-intrinsic exploration and exploitation, SEPO achieves robust and continuous capability evolution. Across scientific, tool-use, and complex logical reasoning domains, SEPO consistently achieves the best performance under identical training time or steps, demonstrating superior efficiency and convergence ceilings. Notably, SEPO maintains stable improvements even in scenarios where baselines severely underperform or fail entirely, such as on complex tasks or with small-scale models. Our code is available at https://github.com/Eric8932/SEPO.",
+  "published": "2026-10-25",
+  "updated": "2026-10-25",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 61
+ },
+ {
+  "id": "2610.41177",
+  "title": "TraceSpec: Understanding and Improving Speculative Decoding for LLM Agents",
+  "abstract": "LLM agents execute tasks through repeated model calls over evolving histories of reasoning, actions, and tool feedback. Aggregate speculative-decoding metrics merge these distinct decisions, providing limited guidance on where draft supervision is needed. We present TraceSpec, a framework connecting trajectory evaluation with adaptive draft training. It combines dynamic execution with fixed-prefix replay and introduces TraceSpec-Traj, a corpus of 10,000 training states and 2,500 test states spanning browsing and software engineering. Analysis of five speculative baselines reveals that aggregate acceptance can rise with context length while declining within matched late browsing actions. Workload and phase further distinguish these trends, motivating supervision guided by trajectory conditions. TraceSpec trains on intermediate assistant turns and allocates a fixed prediction budget using state-conditioned estimates of prefix-aware acceptance gaps. Across three target sizes and two temperatures, it improves replay throughput by 12.5% to 22.6% over its DSpark base. Qwen3-4B ablations show that adaptive allocation increases accepted length by 3.3% to 10.0% over fixed full-turn supervision, with additional comparisons substantiating the roles of state conditioning and consecutive-token agreement. The resulting evaluation resources, trajectory findings, and training strategy connect the analysis of agent execution to practical draft improvement.",
+  "published": "2026-10-30",
+  "updated": "2026-11-06",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 61
+ },
+ {
+  "id": "2611.03142",
+  "title": "DepthGraft: Structural Regularization through Hierarchical Cross-Layer KV Reconstruction",
+  "abstract": "Scaling depth is a key route to stronger large language models, but Pre-LN architectures often suffer from depth-wise information dilution, limiting the effective use of deep layers. While cross-layer connectivity has proven effective at mitigating this problem, existing designs usually introduce additional computation or memory access. We revisit cross-layer KV sharing as an efficient form of such connectivity. Beyond cache compression, each KV reuse edge creates a direct gradient path from deep layers to source KV projections, turning KV sharing into an implicit structural regularizer for KV representation geometry. We provide a systematic analysis of this mechanism, showing that proper sharing topologies sharpen key retrieval directions while enriching the value content subspace, whereas existing adjacent or global-anchor designs do not fully exploit this effect. Motivated by this, we propose DepthGraft, a hierarchical KV-sharing architecture that reconstructs deep-layer KV from stride-aligned shallow-middle source pairs. DepthGraft distributes non-local gradient flow across source layers, while preserving prefill early completion and reducing KV cache by roughly one third. Experiments on dense and MoE models from 0.5B to 16B parameters show consistent downstream improvements under both GQA and MLA. Notably, on the 16B MoE model, DepthGraft achieves a 7.0% absolute improvement on MMLU-Pro, along with gains of 6.6% on CMMLU and 6.4% on C3. These results validate the potential of DepthGraft as a scalable design for large-scale pretraining. The project page is available at https://github.com/jianke0604/DepthGraft.",
+  "published": "2026-11-02",
+  "updated": "2026-11-02",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 61
+ },
+ {
+  "id": "2611.09061",
+  "title": "Does Reasoning Improve Psychological Depth in Large Language Models?",
+  "abstract": "Benchmark gains from reasoning-enhanced large language models encourage the assumption that these models should broadly perform better on complex generative tasks, but this remains underexplored in open-ended, creative domains shaped by nuances of reader experience. We tested this assumption through the lens of psychological depth in short stories. We compared DeepSeek-R1 vs. DeepSeek-V3, our closest available contrast for reasoning-oriented post-training, and GPT-5 vs. GPT-4o, through 60 blinded pairwise evaluations in which seven human annotators and an ensemble LLM-as-a-Judge rated prompt-matched story outputs. Human evaluations showed no universal reasoning advantage: GPT-5 was slightly preferred over GPT-4o (60.0-62.9% across two reasoning-effort settings), whereas DeepSeek-R1 fell behind DeepSeek-V3 (42.9%). Although this pattern was marked by low inter-annotator agreement (Krippendorff's $α= 0.070$), our annotation-quality checks suggested genuine evaluative subjectivity, plausibly reflecting distinct annotator decision schemes rather than annotation failure. In contrast, the LLM-as-a-Judge showed a strong pro-reasoning bias (98.3% of pairs vs. 55.2% of human votes), consistent across its five configurations and partly tracking sentence length. These findings suggest that, at the frontier, reasoning-related quality differences are small enough to be dominated by reader subjectivity, and that LLM-as-a-Judge evaluators can obscure this subjectivity in nuanced creative-generation tasks.",
+  "published": "2026-11-06",
+  "updated": "2026-11-06",
+  "categories": [
+   "cs.CL",
+   "cs.CL"
+  ],
+  "score": 61
+ },
+ {
+  "id": "2611.10601",
+  "title": "AI in the Clinical Documentation Loop: Effects of LLM-Induced Note Bloat and Diagnostic Overcall on Downstream LLMs",
+  "abstract": "Large language models (LLMs) are increasingly used to process medical records for healthcare tasks such as clinical documentation. Because these tools also generate documentation, the relationship is now bidirectional: models both read from and write to the record. Understanding how LLMs behave when reading records that already contain LLM-authored content is therefore critical for their safe deployment. In this study, we examine how LLM-authored content in the medical record affects downstream LLMs that read the same record. We consider two types of LLM-induced artifacts: bloat, in which LLM-generated summaries accumulate in the record and change the length and provenance of its content over time; and distortion, in which LLMs subtly alter clinical findings rather than fabricating facts outright. As a case of distortion, we study diagnostic overcall (documenting an unconfirmed differential diagnosis in the record) and test whether it propagates to the reader LLM's output. Across seven reader models from four families, we find evidence of both effects. First, LLM-generated summary notes modestly but consistently degraded downstream hospital-course generation compared with copy-forward and templated text of matched length. Second, injected overcalls reappeared in downstream outputs at rates that varied by reader model, without detectable changes in standard quality metrics. These findings show the need to monitor AI-generated content in medical records and to account for it when those records are later processed by AI.",
+  "published": "2026-11-07",
+  "updated": "2026-11-07",
+  "categories": [
+   "cs.CL",
+   "cs.AI",
+   "cs.CL"
+  ],
+  "score": 61
+ },
+ {
+  "id": "2611.11541",
+  "title": "Safeguarding Agentic AI in Radiology Workflows: A Multimodel Evaluation of Rule-based and Large Language Model-based Verification",
+  "abstract": "Purpose: To estimate how often tool-using large language model (LLM) agents record clinically relevant false or unsupported information in simulated radiology documentation and how much safeguards applied before each action reduce these errors. Materials and Methods: In this simulation study (October 2026), 48 synthetic, radiologist-reviewed base scenarios covered finding communication, tumor board preparation and follow-up management. Forty-three also had a misleading-information variant (91 variants). Six LLM agents (Claude Sonnet 5.5, GPT-6.1-Sol, GLM-5.3, MiniMax M3, Gemma-4-31B, Qwen3.8-27B) completed each variant with permissions only, deterministic rules, and rules plus a locally run LLM checker (1638 episodes). The primary outcome was at least one executed high-severity violation per episode. Risk differences were estimated per agent at base-scenario level and, exploratorily, pooled across agents, with analyses of document access and blocks. Results: With permissions only, 7.3%-27.1% of episodes had a high-severity violation (pooled across agents, 19.4%). Pooled, it was 16.7% with rules (-2.8 percentage points; 95% CI: -6.1, 0.5) and 13.2% with rules plus the LLM checker (-6.2; 95% CI: -9.5, -3.0). Adding the LLM checker to rules changed it by -3.5 (95% CI: -6.3, -0.7). No difference between agents was detected (P = .43), and task success did not decrease detectably. In misleading variants, agents opened the altered document in 83% of episodes regardless of error, and 58% of erroneous statements cited it. Most blocked actions (64%-68%) would not have caused a violation and were returned for revision. Conclusion: Layered safeguards reduced but did not prevent high-severity errors. Errors after misleading information reflected misjudged rather than missed information.",
+  "published": "2026-11-08",
+  "updated": "2026-11-08",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.CY",
+   "cs.AI"
+  ],
+  "score": 61
+ },
+ {
+  "id": "2610.32492",
+  "title": "Accordion: Elastic-Depth Inference via Fixed-Prefix Layer Looping",
+  "abstract": "Large language models serve applications with diverse inference budgets, but training and maintaining separate models for each budget incurs substantial costs. Recent Looped Transformers enable flexible inference computation through parameter reuse, but maintaining strong performance across different inference budgets remains an open challenge. We introduce Accordion, a mixture-of-experts-based model that supports five inference budgets through fixed-prefix layer looping. Each budget follows a pre-defined execution path, while the minimum budget retains the unlooped model. Joint pretraining samples one budget per micro-batch and optimizes its next-token prediction loss without additional cross-budget consistency objectives. We further preserve these inference budgets through supervised fine-tuning and reinforcement learning, where parameter-group merging and budget-matched multi-teacher on-policy distillation integrate three domain experts into one model. After 3.6T tokens of pretraining, increasing inference depth improves Accordion-6B-A0.5B's five-category macro-average across 37 tasks by 3.01 percentage points, with the middle budget capturing 89% of this gain using half as many additional layer executions. The final model surpasses each domain expert on its corresponding task-and-budget average, while achieving strong instruction-following performance across all budgets and retaining depth-dependent gains in mathematical reasoning and code generation.",
+  "published": "2026-10-23",
+  "updated": "2026-10-23",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 60
+ },
+ {
+  "id": "2610.38383",
+  "title": "How Much Do Teacher Bridges Matter in Interleaved On-Policy Distillation?",
+  "abstract": "On-policy distillation (OPD) trains a student using teacher predictions on student-generated responses. Some methods insert teacher-written segments, or bridges, but disagree on how to train on those tokens. We compare no loss, forward KL and reverse KL on identical trajectories using Qwen3-1.7B as student and Qwen3-4B-Instruct-2507 as teacher. We separate gradients by which model wrote each token. Under our short training runs and BF16 inference, pre-specified tests detected no added accuracy benefit from teacher text as context or as a training target. A one-paragraph bridge after the student's first paragraph is only 2.7% of the tokens and contributes a small gradient nearly orthogonal to the student-token gradient. In this main comparison, the three loss treatments gave similar gradient directions and were statistically equivalent in accuracy within a +/-5 percentage-point margin. An exploratory pilot placing the bridge where failed responses disagreed most with the teacher suggested a benefit from teacher-token loss. A pre-specified replication did not confirm this, and fourfold weighting showed no significant accuracy benefit. Two limitations bound these findings. Among the tested amounts of training on fixed responses, gains peaked after four updates before the student increasingly failed to stop generating. None of the tested online training variants met the criteria for stable stopping and improved accuracy. Our evaluations used BF16 inference, which rounds away most of the small weight changes. When evaluated in exact FP32, the tested replication models frequently reached the response-length limit. Our accuracy findings therefore concern BF16 inference; they do not establish that teacher-token supervision is generally unnecessary.",
+  "published": "2026-10-28",
+  "updated": "2026-10-28",
+  "categories": [
+   "cs.LG",
+   "cs.CL",
+   "cs.LG"
+  ],
+  "score": 60
+ },
+ {
+  "id": "2611.01460",
+  "title": "Can Large Language Model Agents Learn by Watching Tutorial Videos?",
+  "abstract": "Humans continuously acquire knowledge from carefully crafted materials such as books and tutorial videos, carrying that understanding into future tasks. Millions of such instructional videos are uploaded online every day, yet LLM agents remain unable to exploit this ever-expanding wealth of human teaching. Their capabilities are frozen after training, while parameter updates at scale remain prohibitively expensive. This raises the central question: can LLM agents learn from this vast instructional resource without parameter updates? We introduce Tutorial Agentic Learning (TAL), a nonparametric continual-learning paradigm that consolidates tutorial videos into a persistent, structured tutorialbook memory through a two-stage adversarial process that harvests hard, video-grounded questions and uses them to refine the memory. At inference time, TAL retrieves through a Table-of-Contents (TOC) tree, tying retrieval directly to the model's reasoning rather than to embedding similarity. To study this setting, we introduce VidLearn, a multimodal QA benchmark built from 72 chess tutorial videos spanning 12 openings. On VidLearn, TAL outperforms all evaluated baselines and improves monotonically as more videos are consumed, achieving up to 113% and 91% relative gains over the corresponding vanilla MLLMs on the training and test splits, respectively. In actual gameplay, TAL reaches a stronger opening-phase position than its vanilla counterpart in 69% of head-to-head games. Evaluation in a second domain further demonstrates the generality of TAL. Together, these results highlight instructional videos as a scalable resource for parameter-update-free agent continual learning.",
+  "published": "2026-11-01",
+  "updated": "2026-11-01",
+  "categories": [
+   "cs.LG",
+   "cs.AI",
+   "cs.CL",
+   "cs.CV",
+   "cs.LG"
+  ],
+  "score": 60
+ },
+ {
+  "id": "2611.13975",
+  "title": "Understanding Mixture-of-Experts Language Models Beyond Expert Boundaries",
+  "abstract": "In Mixture-of-Experts (MoE) models, the nature of expert specialization remains controversial. Reports of domain-associated expert preferences contrast with analyses attributing routing primarily to token identity or syntactic patterns. To clarify these differing accounts, we look beyond expert-level routing to investigate the neuron-level organization of domain-specialized computation using Routing-Aware Magnitude Profiling (RAMP), a measure developed for this analysis. Using mixed-domain calibration data, we identify domain-specialized neuron sets with 58-74% overlap across multi-source samples of the same domain, compared with 15-24% across domains. To understand how this organization evolves during training, we trace neuron importance throughout pre-training and post-training across three fully open MoE families. Neuron importance continues to reorganize between pre-training checkpoints despite comparatively stable expert-level importance rankings, while post-training largely preserves neuron rankings. Building on these neuron-level perspectives, we further introduce RAMP-based Pruning (RAMPr) to select neurons across experts for balanced multi-domain capability preservation. At 75% neuron retention, RAMPr preserves average 91-98% of original full performance across six models. At 50% retention, our pruning method can reduce resident GPU memory by 36-43% and improves batched prefill throughput by 17-39% effectively. Our code is available at https://github.com/ydyjya/Neuron-Level-Specialization-in-MoE",
+  "published": "2026-11-10",
+  "updated": "2026-11-10",
+  "categories": [
+   "cs.AI",
+   "cs.CL",
+   "cs.AI"
+  ],
+  "score": 60
+ }
+]

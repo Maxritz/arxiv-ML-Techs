@@ -28,6 +28,7 @@ keep everything else. The only thing that must not change is that both modes pre
 | INV-7 | Every reduction over selected experts runs in ascending expert-id order, single-threaded per reduction. No float atomics. | by construction; reviewed per kernel |
 | INV-8 | `L` and the selected set are recorded per token per layer (binary trace) in every build, not just debug builds. | trace file exists for every run |
 | INV-9 | `exact` mode (`beta == 0.0f`) produces a selected set bit-identical to a build with the cache disabled entirely. | `-DEC_DEBUG` self-check, then a one-off release check |
+| INV-10 | prefetch never changes L or the selected set; it only enqueues slots for later serving. No retention or hysteresis. | ec_prefetch unit test |
 
 INV-1 through INV-3 are what make Gate B (paged vs resident, bit-identical logits) true *by construction*
 rather than by tolerance. See §9.
@@ -207,6 +208,30 @@ ec_store_get(store, layer, expert_id) -> const uint8_t* base
 `ec_store_fill_blocking` picks a victim that is `READY` and not in the current selection or the current
 `L` for the layer being computed (INV-5), by lowest `last_use`, ties by slot index. If every slice is
 protected, it evicts the LRU `READY` slot anyway and records a `protected_evict` counter — v0.1 logs it,
+
+
+### 4.1 Prefetch hypothesis — no state mutation
+
+Prefetch enqueues every expert id from L[layer] that has no READY or LOADING slot.
+It never writes to L, never changes the selected set, and never evicts an expert
+that the current selection needs (INV-5). The `last_use` counter is not updated on
+prefetch completion — only compute access bumps the clock. This means two paged runs
+with the same L trace are replayable for debugging stall patterns.
+
+### 4.2 Prefetch correctness (PF-1...PF-5)
+
+PF-1: Prefetch enqueues only ids not already in L[layer]. If an expert is in L,
+     it is served from the current cache hit; prefetching it again is a no-op.
+PF-2: The `last_use` clock is not updated on prefetch completion. Only compute access
+     increments the clock, ensuring deterministic replay of L traces.
+PF-3: Prefetch never evicts. Eviction is only triggered by `ec_store_get` when every
+     slot is occupied and the requested expert is not protected (INV-5).
+PF-4: Two paged runs with identical L traces and identical arena layout produce
+     identical selected sets, regardless of prefetch activity.
+PF-5: Prefetch may overlap with compute (non-blocking enqueue), but the selected set
+     for the current token/layer is determined solely by L and router logits, not by
+     which slots were prefetched.
+
 because it means `n_slots` is too small for `top_k` and the budget needs raising.
 
 ---
