@@ -483,9 +483,6 @@ Newly released papers (Aug 8–10 2026):
 | 5 | [2608.08340](https://arxiv.org/abs/2608.08340) | OpRAG: A Resource-Deterministic Runtime for GPU-Backed Multi-Stage RAG Workflows | Resource-deterministic execution runtime for multi-stage agentic RAG workflows combining embedding, vector search, and LLM decoding. |
 
 
-
-
-
 ---
 
 # Part 9 — Latest LLM Articles (Oct 6–14, 2026)
@@ -962,20 +959,26 @@ The OPD thread from Part 9 matured from "where to supervise" into **"what goes w
 - **Tokenization is a correctness gate and a memory decision, not a metric.** No intrinsic tokenizer metric predicts downstream quality (§30.5); a frozen 16 MB table can replace 168M embedding parameters at near-parity (§30.4); and BPE's merge budget is a model-selection problem with corpus-statistics solutions (§30.1).
 - **Portability is not assumed.** Every speculative method tested lost throughput on Apple Silicon while winning 2–6× on server GPUs (§32.7); 2:4 loses to the next lower precision at equal bits; static-`k` beats dynamic expert skipping. Measure on the target, against the boring baseline.
 
-## 38. KV Cache — Placement, Eviction and Codecs (Method Detail)
+# Part 11 — Latest LLM Articles & Method Detail (2024–2026 sweep)
 
-### 38.1 FlatCake write-once placement
+The window is the broad 2024–2026 fetch (`data/arxiv_latest_20261231.json`, 1161 entries,
+2024-03-11 → 2026-11-10) rather than a single fortnight. Sections are grouped by mechanism,
+not by date; every claim keeps its source and its reported conditions, and anything that did
+not survive its own paper's controls is marked as such.
+
+## 38. KV Cache — Placement, Eviction and Codecs (Method Detail)
 
 - **[2610.38355](https://arxiv.org/abs/2610.38355) FlatCake** — a flat KV storage architecture that exposes host DRAM and NVMe SSD as peer media in a unified 64-bit address space. Exploiting the fact that KV blocks are write-once, immutable, and reused at session scope, FlatCake places each block directly onto its target medium in session-contiguous, layer-major order at creation time and never migrates it. *Reported (Claude Code trace, DeepSeek-V4-Flash):* 94% cache hit rate as load increases (versus 64% for Mooncake), eliminates Mooncake's 6.5×–6.7× SSD read amplification, and reduces peak-load mean TTFT by 1.6× while improving total token throughput by 1.6×. Across 8K–128K contexts on Llama-3.1-70B, FlatCake further reduces mean TTFT by up to 2.4× over Mooncake and 1.8× over Mooncake-GDS.
 
-### 39. MoE on Constrained Hardware — Offload, Paging and Precision-on-Demand (Method Detail)
+## 39. MoE on Constrained Hardware — Offload, Paging and Precision-on-Demand (Method Detail)
 
 - **[2611.04794](https://arxiv.org/abs/2611.04794) Bevy** — prefetching can be harmful when there is an expert cache in GPU memory, because as the cache holds more of the experts a token actually needs, expert prediction becomes less precise. Its replacement needs no prediction at all — a request whose experts are resident runs ahead to later layers while other requests' fetches are in flight, revealing what it needs next. *Across two local platforms:* 3.46× the decode throughput of llama.cpp and up to 1.55× the fastest prefetching baseline.
 - **[2611.03173](https://arxiv.org/abs/2611.03173) PagedMoE** — one expert state stored once with prefix-compatible bitplanes lets 1–8 bits be read as refinement depth, so a miss can fetch only the missing planes and reuse what is cached (8.89 tok/s on a 24 GiB cache at 2.5 average bits). That attacks I/O demand and predicts nothing.
 - **[2610.39216](https://arxiv.org/abs/2610.39216) PDScope** — on the same CPU–GPU node prefill is compute-bound and decode is I/O-bound, so one prefetch policy is a compromise by construction. The paper's 2.5–10.3× prefill / 2.1–6.1× decode gains come from predicting, placing and scheduling per phase.
 - **[2610.38355](https://arxiv.org/abs/2610.38355) FlatCake** (again) — the 94% vs 64% hit rate is placement, not prefetching: 94% versus 64% came from where a block was placed at creation.
+- **SafeStart** — "same experts, fewer bytes" is not free: dropping to two thirds of the experts raised harmful compliance by 18.4 pp on one model, concentrated in the prompt and the first eight generated tokens. Expert reduction is a safety change, not only a quality one.
 
-### 40. Looped and Recurrent-Depth Models — a Distinct Serving Target
+## 40. Looped and Recurrent-Depth Models — a Distinct Serving Target
 
 - **[2611.05150](https://arxiv.org/abs/2611.05150) ExactLoop** — 5,689 kernels per token, KV per loop step, recurrent state that must be requantized every step. Ships nothing unless bitwise-identical or passes a pre-declared accuracy rule; rejected an approximate fusion that was no faster and cost one GSM8K point. Treat as out of scope for v0.1 explicitly, or budget per-loop-step dispatch and per-cell KV precision from the start — half-measures will fail the gates.
 - **[2611.07211](https://arxiv.org/abs/2611.07211) LoopDuet**
@@ -983,7 +986,7 @@ The OPD thread from Part 9 matured from "where to supervise" into **"what goes w
 - **[2611.04137](https://arxiv.org/abs/2611.04137) LoopKV** (35% less KV, 1.7–2.2×)
 - **[2611.01864](https://arxiv.org/abs/2611.01864) LoReS**
 
-### 41. Low-Bit and the Memory Hierarchy
+## 41. Low-Bit and the Memory Hierarchy
 
 - **[2611.00547](https://arxiv.org/abs/2611.00547) BitLLM** — 1.78/1.73/1.58/1.44× (4-bit→1.73×, 2-bit→1.58×, 1-bit→1.44× H100) with comparable accuracy to BF16 on GLUE and LM eval.
 - **[2611.09424](https://arxiv.org/abs/2611.09424) MINE** — training-free pruning of low-multiplicity experts; 2.52×/1.48× speedup on math/coding at matched accuracy.
@@ -994,14 +997,14 @@ The OPD thread from Part 9 matured from "where to supervise" into **"what goes w
 - **[2611.07217](https://arxiv.org/abs/2611.07217) TileQuant** — 2.66× speedup from tile-level quantization.
 - **[2611.09598](https://arxiv.org/abs/2611.09598) Transformer-FSQ** — FSQ quantization for transformer layers; lossless up to 4-bit.
 - **[2611.00464](https://arxiv.org/abs/2611.00464)** — NF4+L1 collapse, all 16.
-
-
+- **StrataFlux** — under memory pressure, spend I/O on *precision* rather than on whole tensors: streaming refinement bits from RAM/SSD rather than a coarser tensor recovers the 2-bit path from 11.0% to 47.1% AIME. **GAAC** is the lossless counterpart.
 
 ## 42. Sparse Attention — the Indexer Is the Cost
 
 ### 42.1 Indexers that stop scanning everything
 
 - **[2610.42147](https://arxiv.org/abs/2610.42147) Latent Sparse Attention (LSA)** — at >1M tokens, sparse attention's *indexer* is either still quadratic or loses accuracy. LSA clusters keys hierarchically in a **learned latent space**, so queries score a hierarchy of clusters instead of every key, in prefill, decode and training. Two variants: D-LSA (distilled onto a pretrained model) and N-LSA (trained natively on next-token loss). *Reported:* on GLM-5.3-FLASH (Qwen-3.8-27B) at 10M tokens, one attention layer is 22.7× (72.4×) faster in prefill and 4.6× (42.5×) in decode versus its original sparse (full) attention.
+
 ### 42.2 Retrofits that need no gradient updates
 
 - **[2611.03200](https://arxiv.org/abs/2611.03200) CISA** — select fixed-size **KV chunks** from compact summaries of existing keys: no token-level index and no separate full-length index cache; one indexing query per KV group, selections shared across queries in the group; QShare reuses selections across adjacent queries during prefill for KV reuse and better utilization. *Reported:* Nemotron 3 Nano/Ultra and Inkling-Small, one-layer BF16 at batch 32: 11.7× faster core attention in prefill near the end of a 1M prompt and 13.0× in decode; **8.6× / 3.0×** once chunk scoring, selection and all other measured GPU work are included; on Ultra NVFP4 with a 4,096-chunk budget, aggregate scores within 1.5 pp of dense on MRCR, LongBench v2 and GraphWalks.
