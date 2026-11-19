@@ -6,9 +6,9 @@ Writes data/arxiv_latest_<from>_<to>_<utc-run-stamp>.json and prints a ranked di
 The filename carries the window and the UTC start time of the run, so two runs can never
 overwrite each other's output the way a bare DATE_TO stamp did.
 
-Any page that cannot be fetched after its retries aborts the run with exit code 1 and no
-file is written. A short page is otherwise indistinguishable from a rate-limited one, which
-is how a truncated snapshot was previously written under a full-year filename.
+If any page cannot be fetched after its retries the run exits with code 1 and writes nothing:
+a failed request used to look like a short page, so a rate-limited run wrote a partial
+snapshot under a full-year filename.
 """
 import json
 import os
@@ -25,6 +25,7 @@ API = "http://export.arxiv.org/api/query"
 
 class FetchError(RuntimeError):
     """A page could not be retrieved, so the run cannot claim complete coverage."""
+
 
 # Window: everything since the last update (ENGINE_MASTER_SPEC.md §12 covers ~7 Oct 2026)
 DATE_FROM = os.environ.get("DATE_FROM", "202610060000")
@@ -111,13 +112,14 @@ def fetch(cat, start, max_results):
         try:
             with urllib.request.urlopen(url, timeout=60) as r:
                 body = r.read().decode("utf-8", "ignore")
-            if not body.strip():
-                raise FetchError("empty response body")
-            return body
+            if body.strip():
+                return body
+            reason = "empty response body"
         except Exception as exc:  # noqa: BLE001
-            print("  retry %d after %s" % (attempt + 1, exc), file=sys.stderr)
-            time.sleep(3 * (attempt + 1))
-    raise FetchError("%s start=%d: no response after 4 attempts" % (cat, start))
+            reason = exc
+        print("  retry %d after %s" % (attempt + 1, reason), file=sys.stderr)
+        time.sleep(3 * (attempt + 1))
+    raise FetchError("%s start=%d: no usable response after 4 attempts" % (cat, start))
 
 
 def score(paper):
@@ -138,16 +140,16 @@ def main():
     existing = collect_existing_ids()
     print("existing repo arXiv IDs: %d" % len(existing), file=sys.stderr)
     papers = {}
-    failures = []
     for cat in CATEGORIES:
         start, page, total = 0, 500, 0
         while start < 5000:
             try:
                 got = parse_feed(fetch(cat, start, page))
             except FetchError as exc:
-                failures.append(str(exc))
-                print("  %s FAILED at start=%d: %s" % (cat, start, exc), file=sys.stderr)
-                break
+                print("%s failed at start=%d: %s" % (cat, start, exc), file=sys.stderr)
+                print("no snapshot written; re-run later, arXiv rate-limits aggressively.",
+                      file=sys.stderr)
+                sys.exit(1)
             total += len(got)
             for p in got:
                 papers[p["id"]] = p
@@ -158,14 +160,6 @@ def main():
             time.sleep(2.0)
         print("  %s -> %d entries" % (cat, total), file=sys.stderr)
         time.sleep(1.0)
-    if failures:
-        print("refusing to write a partial snapshot; %d page fetch(es) failed:" % len(failures),
-              file=sys.stderr)
-        for f in failures:
-            print("  - %s" % f, file=sys.stderr)
-        print("re-run the fetch (arXiv rate-limits aggressively); no file was written.",
-              file=sys.stderr)
-        sys.exit(1)
     fresh = [p for p in papers.values() if p["id"] not in existing]
     for p in fresh:
         p["score"] = score(p)
