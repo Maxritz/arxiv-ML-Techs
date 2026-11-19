@@ -966,12 +966,14 @@ snapshots:
 
 - `data/arxiv_latest_20240101_20241231_20261113T121736Z.json` — 837 entries, 2024-01-01 → 2024-12-30
 - `data/arxiv_latest_20250101_20251231_20261113T122134Z.json` — 1116 entries, 2025-01-03 → 2025-12-30
-- `data/arxiv_latest_20260101_20261231_20261113T122630Z.json` — 1011 entries, 2026-01-01 → 2026-11-12
+- `data/arxiv_latest_20260101_20261231_20261113T122630Z.json` — 1089 entries, 2026-01-01 → 2026-11-12
 
-2964 papers kept at score ≥ 60. Sections are grouped by mechanism, not by date; every claim keeps
+3042 papers at score ≥ 60. Sections are grouped by mechanism, not by date; every claim keeps
 its source and its reported conditions, and anything that did not survive its own paper's controls
 is marked as such. Each annual window is paged newest-first and capped at 5000 entries per category,
 so the busiest categories (cs.LG, cs.CL, cs.DC) cover the tail of each year rather than every day of it.
+The 2026 snapshot additionally carries the papers cited below in this part: the fetch drops IDs already
+cited in the repo, so they were merged back to keep the JSON and the digest in agreement.
 
 ## 38. KV Cache — Placement, Eviction and Codecs (Method Detail)
 
