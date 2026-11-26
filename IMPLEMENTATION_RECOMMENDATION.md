@@ -304,4 +304,81 @@ locality/SSD traffic/cold-token latency per model and prompt trace, then add the
 aggressive KV + speculative options only when the measured bottleneck justifies them. Keep the determinism guardrail + losslessness audit from day one
 so any 98%-hit claim is reproducible.
 
+---
+
+## 8. 2024–2026 EVIDENCE RE-RANKING
+
+§2 ranked components from the Aug–Oct 2026 window. The repo's annual snapshots hold **367 MoE-tagged papers** for 2024–2026 (50 / 122 /
+195), and the 2024–2025 half was never cited in this document. This section re-checks the ranking against that longer record. It changes
+*ordering and metrics*, not the substrate decision in §1.
+
+### 8.1 Verdicts (promote / hold / demote), with the evidence that moved them
+
+| # | Item from §2 | 2024–2026 evidence | Verdict |
+|---|---|---|---|
+| 1 | Exact expert-granularity tiering (§2.1.3) | Fiddler 2402.07033, MoE-Lightning 2411.11217, HOBBIT 2411.01433, fine-grained offloading 2502.05370 all converge on per-expert decisions and overlap | **Promote** — it is the settled baseline, not a novel choice. Build it first and stop calling it the differentiator; the differentiator is the policy on top |
+| 2 | FATE-style prefetch (§2.1.2) | ProMoE 2410.22134 (proactive caching), inter-layer affinity 2401.08383, SPICE 2608.21240 (cheap surrogates) | **Promote**, with a cheaper variant: log the gate-based prediction first, add the predictor only if the trace shows misses it would have caught |
+| 3 | Fixed-precision expert slots | HOBBIT 2411.01433, MatMoE 2611.01704, PagedMoE 2611.03173: precision heterogeneity is a first-class lever | **Hold for v0.1, plan for v0.2** — document the simplification in the slot layout, and leave `slot_bytes` derived from metadata rather than hard-coded |
+| 4 | Simple LRU victim selection | SliceMoE 2512.12990 (miss-rate-constrained), Fewer Expert Transfers 2611.15842 (measure copies, not switches), When Fancy Eviction Fails 2609.28870 | **Hold (keep LRU)** — three independent results say policy sophistication is not where the wins are at this scale |
+| 5 | Speculative decoding in Phase C | 2508.21706 (helps by hiding transfer latency) vs SP-MoE 2510.10302 (loses to bandwidth contention) | **Demote to an experiment with a pre-registered comparison**, not a planned phase feature |
+| 6 | 98% hit-rate target (§5) | MoE-Lens 2504.09345 (roofline bound), MoE-CAP 2412.07067 (cost/accuracy/performance triple), 2508.06978 (energy) | **Re-scope**: replace the single target with a bound + a triple. A hit rate alone is unfalsifiable |
+| 7 | Single scheduling policy (§4 Phase B–C) | DuoServe-MoE 2509.07379, layered prefill 2510.08055, PDScope 2610.39216, MoE-CORE 2610.01950 | **Split by phase** (prefill vs decode). This is the largest structural change in this section |
+| 8 | Cloud-style disaggregation (Janus 2512.13525, MegaScale-Infer 2504.02263, AFD 2605.28302) | The design space is now mapped, but all of it assumes multiple devices and serving concurrency | **Keep out of scope**; read for the phase-split idea only |
+| 9 | Serverless / multi-tenant experts (MoEless 2603.06350, EaaS 2509.17863, CrossPool 2606.24506) | Real systems with real numbers, all at fleet scale | **Out of scope** for a local engine |
+| 10 | Resilience and recovery (Tarragon 2601.01310, ReviveMoE 2602.21140, partial-rank 2605.10670) | Failures are a fleet problem; a single workstation has none of the failure modes | **Out of scope** |
+| 11 | Energy as a reported metric (new) | 2508.06978 (SSD read energy ≫ DRAM), SliceMoE 2512.12990 (energy budget), MoE-CAP | **Add now** — it is nearly free to log and it directly contradicts the "SSD tier is always better" assumption in §2.1.3 |
+| 12 | Safety of active-expert reduction (new) | SafeStart 2611.06147 (refusal weakens while accuracy holds), RouteScan 2605.24817 (routing telemetry audit) | **Add as a gate condition** if any expert-reduction shortcut is ever enabled |
+| 13 | Batch-1 assumption | Lynx 2411.08982, Duplex 2409.01141: batching densifies expert activation | **State explicitly** in §4 and §5 so the hit-rate numbers are not read as portable |
+
+### 8.2 Revised "build this first" list (supersedes §7 where they differ)
+
+1. **Substrate + exact tiering + measurement bound.** ggml/llama.cpp, expert-granularity reads, hit/miss counters, and a roofline
+   estimate from MoE-Lens (2504.09345). Deliverable: bytes/token, stall time, energy/token on one trace.
+2. **Phase split.** Two prefetch policies — stage next-layer expert sets during prefill (MoE-CORE 2610.01950), stage routed rows during
+   decode (PDScope 2610.39216). This is the change the 2025–26 record forces.
+3. **Cheap prefetch, logged.** Adjacent-layer gate prediction (FATE-family) with the prediction logged but not trusted; compare against
+   the ProMoE-style proactive baseline (2410.22134).
+4. **Determinism + canonical ordering**, unchanged from §2.1 and 2607.28097.
+5. **Only then** the predictor stack and any speculative mode, each with the paired experiment from §8.1 items 2 and 5.
+
+### 8.3 Three claims to stop making
+
+- "98% hit rate" without a trace, batch size and residency fraction. 2025's comparables are lower and state their conditions.
+- "SSD tiering is more efficient." It is more *capacity*. Energy per bit says the opposite (2508.06978).
+- "Speculation composes with offload for free." It composes or it contends; the sign depends on overlap (2508.21706 vs 2510.10302).
+
+## 9. ESP32 / MCU-CLASS LAYER — NOT A PHASE, AND THE ONE GATE IT ADDS
+
+**Verdict up front:** nothing in the ESP32/MCU record promotes, demotes or reorders Phase A–E. It adds one gate (F0) and one hard
+scope statement. The corpus contains exactly one ESP32-named paper (2506.11003); the rest is MCU/extreme-edge work that bounds what
+a *client* device can do.
+
+### 9.1 Promote / hold / demote
+
+| Item | Verdict | Evidence |
+|---|---|---|
+| Running any part of the engine on an MCU (ESP32, Cortex-M, RP2040) | **Demote permanently — not a phase** | Capacity arithmetic: one Q4 expert ≈100 MB vs 8 MB PSRAM on an ESP32-S3. 2412.09289 fits a transformer in 64 KB only because it is ≤10^6 params, not a 12B MoE |
+| MCU as telemetry / sensor client | **Promote only if a physical board exists** | 2406.09424: hierarchical inference accepts locally when confident and offloads the rest; the accept/offload decision is the client's job |
+| Design-time energy/latency estimation for any MCU-deployed auxiliary model | **Promote to a checklist item** | 2608.03589 predicts per-layer inference + training + checkpointing energy at design time, 16.6% WAPE on Cortex-M4 — cheaper than deploy-and-measure |
+| On-device fine-tuning on MCU-class SoCs | **Hold — out of scope** | 2603.09511 reaches −23% dynamic memory and 15× fewer trainables with LoRA, but on a heterogeneous RISC-V SoC, not an ESP32 |
+| Ternary / ROM / LUT accelerators (BitNet-class) | **Hold — hardware we do not have** | 2407.00088 and 2512.06443 (CPU LUT), 2602.20662 (ROM), 2510.15926 (FPGA: 5 W, 25 tok/s, 0.45–0.96 s TTFT) |
+| LLM-generated ESP-IDF firmware | **Demote to "reviewed draft only"** | 2506.11003: 29.4% best pass@1 on ESP-IDF; 21.4% Arduino→ESP32, 27.8% with RAG + compiler feedback |
+
+### 9.2 Gate F0 — device-class contract (add before Phase A ships)
+
+Write one line into the README and every gate report: **minimum target = a machine with ≥ X GB usable RAM and either a
+Vulkan-capable GPU or a ≥4-core CPU; MCU-class devices are clients, not targets.** Record device class in the telemetry header so a
+run can never be compared across classes silently. This is minutes of work and it prevents the commonest category error in this
+space — treating "small language model" and "microcontroller" as the same tier. 2503.09114 and 2511.07425 show the ladder: SBCs
+handle ≤1.5B params, and even there quantization lowers memory without removing the bottleneck.
+
+### 9.3 Three claims to stop making (MCU edition)
+
+- "It runs on an ESP32" for anything above ~10^6 parameters. 8 MB PSRAM is a hard ceiling; a 0.5B 4-bit model is ~250 MB.
+- "Fewer parameters means faster on the target." 2608.00737 measured the opposite on a scalar RISC-V core: 13.5× and 8.0× slower,
+  11.3× and 5.6× more energy, up to 43× earlier divergence under INT8.
+- "The LLM can write the firmware." 2506.11003's best ESP-IDF result is 29.4% pass@1 on simple cases; draft-and-review or nothing.
+
+---
+
 *All citations are in `ENGINE_MASTER_SPEC.md` §12–§13; code-availability findings are in §3 above.*

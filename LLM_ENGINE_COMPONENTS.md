@@ -11,7 +11,9 @@
 3. [What Mellum2.1 Actually Uses (build only these)](#3-what-mellum21-actually-uses-build-only-these)
 4. [What to Skip for v0.1](#4-what-to-skip-for-v01)
 5. [Gap Papers (no direct paper, build from adjacent systems)](#5-gap-papers-no-direct-paper-build-from-adjacent-systems)
-6. [Citations Note](#6-citations-note)
+6. [2024–2026 MoE-Era Additions (full sweep)](#6-20242026-moe-era-additions-full-sweep)
+7. [ESP32 / MCU-Class Additions](#7-esp32--mcu-class-additions)
+8. [Citations Note](#8-citations-note)
 
 ---
 
@@ -299,7 +301,138 @@ These are the items from the PRISM coverage gaps list that apply to your engine,
 
 ---
 
-## 6. Citations Note
+## 6. 2024–2026 MoE-Era Additions (full sweep)
+
+§2 maps papers mostly from the Aug–Oct 2026 window. This section adds the rest of the period from the repo's three annual snapshots:
+**367 MoE-tagged papers** (2024: 50, 2025: 122, 2026: 195), of which the 2024–2025 half (172) was previously uncited here. Rows are
+grouped by the component they actually change; "v0.1" says whether Mellum2.1's first cut touches it.
+
+### 6.1 Router / expert selection
+
+| Paper | When | Relevance to v0.1 |
+|---|---|---|
+| Lynx (2411.08982) | 2024 | **Batching forces every expert active** and erases the bandwidth win. v0.1 is batch-1, so this is a limit on any future server mode, not a bug. |
+| Mixture Compressor (2410.06270) | 2024 | Many tokens need one expert, not top-8; activated experts are redundant. Sets the ceiling on how much top-k reduction can save. |
+| Inter-layer expert affinity (2401.08383) | 2024 | Adjacent layers route correlated experts — the empirical basis for an adjacent-layer predictor. |
+| MoE-GPS (2506.07366) | 2025 | Dynamic expert duplication for load balance; the predictor side of "which experts to replicate". Not v0.1. |
+| C2R (2504.01337) | 2025 | Collaboration-constrained routing to make expert parallelism cheaper; routing shaped by placement. Not v0.1 (single GPU). |
+| MoE-Prism (2510.19366) | 2025 | Per-request top-k (elastic routing) rather than a fixed k. Changes outputs; needs its own gate. Not v0.1. |
+| HERO-MoE (2609.32581) | 2026 | Historical routing signal fused into selection. A predictor variant, not a runtime change. |
+| RouteScan (2605.24817) | 2026 | Routing telemetry as an audit channel — cheap to log next to hit/miss counters. |
+
+**Build-approach amendment:** keep §2.4's canonical ordering rule unchanged; add to the telemetry the per-layer selected-expert histogram
+so a cache trace can be compared against a paper's published distribution. Do not adopt batch-aware or elastic selection in v0.1 — both
+change model output.
+
+### 6.2 Expert store, cache and offload policy
+
+| Paper | When | Relevance to v0.1 |
+|---|---|---|
+| Fiddler (2402.07033) | 2024 | CPU participates in compute; the naive alternative is frequent small transfers. Justifies v0.1's "CPU executes misses" option later. |
+| ProMoE (2410.22134) | 2024 | Proactive (pre-router) prefetch beats reactive caching — prior art for `ec_prefetch`. |
+| HOBBIT (2411.01433) | 2024 | Mixed-precision expert offload + adaptive prefetch granularity. Fixed `slot_bytes` is the v0.1 simplification to record. |
+| MoE-Lightning (2411.11217) | 2024 | Offload pipeline + cache policy matter more than kernel micro-optimisation at small VRAM. |
+| EPS-MoE (2410.12247) | 2024 | Expert-level pipelining hides load; scheduling unit is the expert. |
+| Duplex (2409.01141) | 2024 | Batching turns sparse expert use into dense DRAM traffic — the hardware reason Lynx exists. |
+| Fine-grained expert offloading (2502.05370) | 2025 | Coarse per-expert caching wastes capacity; cache decisions should be finer than "whole expert resident". |
+| HybriMoE (2504.05897) | 2025 | Schedule and cache must be co-designed on a hybrid CPU-GPU path. |
+| DuoServe-MoE (2509.07379) | 2025 | Two-phase (prefill/decode) prefetch policy. v0.1 decode-only means one phase — say so. |
+| MoE-Lens (2504.09345) | 2025 | Roofline bound under a memory budget: the number to beat before claiming a cache design works. |
+| SliceMoE (2512.12990) | 2025 | Bit-sliced caching under an explicit miss-rate constraint; cache policy as a constrained optimisation. |
+| OD-MoE (2512.03927) | 2025 | Cacheless edge variant: load on demand, no resident set. A fallback mode worth knowing. |
+| MoE-CORE (2610.01950) | 2026 | Stage complete expert **layers** in alternating buffers during prefill; stage rows during decode. |
+| PagedMoE (2611.03173) | 2026 | Cross-precision cache: key becomes (expert, precision). v0.2 material. |
+| Fewer Expert Transfers (2611.15842) | 2026 | Measured transfers: fewer routing switches ≠ fewer copies. Validate any "stability" claim by counting bytes. |
+| ZipMoE (2601.21198) | 2026 | Lossless compression + cache-affinity scheduling for on-device. Composes with, not replaces, slotting. |
+| DALI (2602.03495) | 2026 | Policy should depend on workload class (chat / long prefill / agent), not one static config. |
+| SPICE (2608.21240) | 2026 | Low-rank surrogates for prefetch decisions — cheaper than scoring with the full gate. |
+| APEX (2608.11688) | 2026 | Edge prefetch must adapt to measured bandwidth, not a fixed depth. |
+
+**Build-approach amendment:** §2.6's pseudocode stays as the v0.1 store. Add two fields to the telemetry: bytes read per token and
+distinct experts touched per layer. Those two numbers are what the 2025–26 papers actually tune.
+
+### 6.3 KV cache, attention and phase behaviour
+
+| Paper | When | Relevance to v0.1 |
+|---|---|---|
+| PiKV (2508.06526) | 2025 | MoE sparsifies compute but not KV; KV stays dense and synchronised. Confirms KV is a first-class budget even in a MoE engine. |
+| MoSKA (2511.06010) | 2025 | Shared KV attention for long sequences; a compression option for later. |
+| Layered prefill (2510.08055) | 2025 | Schedule along layers, not token chunks, to avoid MoE stalls. Relevant only if a prefill path is added. |
+| PDScope (2610.39216) | 2026 | Prefill is compute-bound, decode I/O-bound under low batching; one phase-agnostic policy loses both. |
+| Rimuru (2610.40305) | 2026 | Weight and KV residency share one budget and must be re-partitioned at runtime. |
+| Physically partitioned KV (2609.14507) | 2026 | KV format split to balance CPU/GPU load in MoE inference — a layout decision, not a compressor. |
+| SAEM (2608.21614) | 2026 | Chain-of-thought phases have different expert locality; stage-aware management. |
+
+**Build-approach amendment:** none for v0.1 (contiguous KV, one session). Record in §4's skip table that KV is not a MoE side-effect and
+that a future multi-session mode must budget it against the expert arena (Rimuru).
+
+### 6.4 Speculative decoding / MTP
+
+| Paper | When | Relevance to v0.1 |
+|---|---|---|
+| Hiding offload latency with SD (2508.21706) | 2025 | Speculation can overlap transfer latency with verification. |
+| SP-MoE (2510.10302) | 2025 | **The counter-result:** SD and prefetch contend for CPU-GPU bandwidth; combining them can lose. |
+| Less Experts, Faster Decoding (2607.12696) | 2026 | Cost-aware draft length for MoE — draft budget should follow expert cost, not a constant. |
+| Why SD works better than predicted on sparse MoE (2610.38981) | 2026 | Acceptance-rate model for MoE differs from dense; don't reuse dense cost models. |
+| BigMoMo (2609.14643) | 2026 | Speculative decode on mobile with a large MoE — phase-specific overlap design. |
+
+**Build-approach amendment:** MTP stays out of v0.1. If it is added, treat 2508.21706 and 2510.10302 as a paired experiment: the design
+must be measured both ways, since the sign of the effect depends on overlap.
+
+### 6.5 Backends and kernels
+
+| Paper | When | Relevance to v0.1 |
+|---|---|---|
+| SonicMoE (2512.14080) | 2025 | IO- and tile-aware kernels for fine-grained, high-sparsity MoE; expert-aware is not enough. |
+| MonoMoE (2609.04244) | 2026 | Fused expert-major megakernel avoids tile padding that token-major grouped GEMMs pay at decode batch sizes. |
+| Cross-Platform Fused MoE Dispatch in Triton (2605.23911) | 2026 | Portable fused expert dispatch without CUDA — the closest thing to a portable MoE kernel contract. |
+| Mixture-of-Kittens (2609.36070) | 2026 | MoE megakernel for NVL72 — scale reference only. |
+| Transition-Aware Backend Dispatch (2607.17415); WebGPU dispatch (2604.02344) | 2026 | Backend dispatch and portability caveats; Vulkan is a distinct target, not a free CUDA replacement. |
+
+**Build-approach amendment:** for the Vulkan path, the relevant lesson is MonoMoE's: at batch-1 decode the per-expert tile is tiny, so
+fusing the expert loop into one dispatch matters more than tuning a grouped GEMM. That is a Vulkan-friendly shape (one command buffer,
+many small workgroups).
+
+### 6.6 What this era does *not* change for v0.1
+
+- No batch-aware or elastic routing (Lynx, MoE-Prism) — both change outputs.
+- No disaggregation (Janus, MegaScale-Infer, AFD 2605.28302) — single process, single GPU.
+- No mixed-precision slots (HOBBIT, MatMoE, PagedMoE) — one precision, fixed slot.
+- No speculative decoding (SP-MoE, Less Experts) — after Gate C.
+- No serverless or multi-tenant expert services (MoEless 2603.06350, EaaS 2509.17863, CrossPool 2606.24506).
+
+---
+
+## 7. ESP32 / MCU-Class Additions
+
+**Scope note.** The corpus has exactly **one** paper that names the ESP32 (2506.11003) and **15** adjacent MCU/extreme-edge papers.
+None of them changes a component in §1. This section exists so the component map is not silently GPU/CPU-only, and so the boundary is
+written down once instead of being re-argued per component.
+
+### 7.1 Per-component effect
+
+| Component (§1) | Effect of the MCU record | Evidence |
+|---|---|---|
+| 4. MoE router | **None on the host.** On a companion MCU the analogous decision is accept-vs-offload, not top-k: keep a small local model, accept when confident, upload the rest | 2406.09424 |
+| 6. Expert store + LRU | **None, and no "micro-tier" should be built.** Smallest unit is one expert ≈100 MB; 8 MB PSRAM holds ~0.08 of one expert. A cache keyed on experts cannot exist below ~1 GB | §20.1 of `ENGINE_MASTER_SPEC.md` |
+| 7. KV cache | **None.** Even 8-bit KV for 131K context is orders of magnitude over 8 MB. A client keeps no KV; it streams tokens | — |
+| 11. MTP / 13. Vulkan kernels | **None.** LUT-based mpGEMM (2407.00088, 2512.06443) is a CPU-path throughput technique; it must not enter the f32 oracle used by Gates A/B | 2407.00088, 2512.06443 |
+| 15. Gates | **One addition:** a device-class field in the report header (F0 in `IMPLEMENTATION_RECOMMENDATION.md` §9.2), so a run cannot be compared across machine classes | 2503.09114, 2511.07425 |
+| 16. Telemetry | **One addition:** an MCU may be an out-of-band sensor/power feeder over UART or Wi-Fi. Log its samples with a device-class tag; do not merge them into per-token timing | 2608.03589 |
+
+### 7.2 The one thing worth reading if firmware enters scope
+
+If this project ever ships ESP-IDF code — a telemetry board, a fan/power controller — 2506.11003 is the relevant measurement, and it
+is a warning. On simple embedded tasks the best of 10 mainstream LLMs reached **29.4% pass@1** for ESP-IDF, against 73.8% for
+MicroPython on the RP2040; Arduino→ESP32 migration sat at 21.4%, rising to 27.8% with retrieval augmentation plus compiler feedback.
+Treat generated firmware as a draft that a human reviews line by line, and never as a build step.
+
+### 7.3 What this does *not* change for v0.1
+
+Everything in §3 still applies unchanged: there is no MCU build target, no MCU backend, no MCU expert tier, and no MCU-specific
+kernel. The correct output of this section is a shorter scope statement, not more code.
+
+## 8. Citations Note
 
 All arXiv IDs and paper claims in this document are **leads to verify, not ground truth**. The Mellum2 Technical Report (2605.31268) is the authoritative source for Mellum2.1's architecture. llama.cpp is the authoritative oracle for tokenizer and output validation. Every paper-listed technique should be checked against actual behavior before relying on it.
 

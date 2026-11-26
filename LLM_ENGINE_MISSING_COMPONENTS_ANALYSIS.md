@@ -858,6 +858,86 @@ Latent Communication Pay 2608.04893 · Multi-Node B300 field report 2608.05944 �
 **On-policy distillation / training:** SAF-OPD 2607.29209 · FP-OPD · SPOT 2608.04419 · FutureBridge-OPD 2608.01953 · GRSD
 2607.28076 · AgentOPSD 2608.05987 · Delta-OPD 2608.05802 · Efficient KD 2608.03796 · Progressive² KD 2608.00129
 
+---
+
+## 12. 2024–2026 SWEEP — GAP REGISTER UPDATE
+
+This file is the Aug-2026-era sibling of `ENGINE_MASTER_SPEC.md`. The canonical full-sweep layer is now **§19 of that document**; this
+section only records how the gap register above changes when the 2024–2025 record is read in. Source: the three annual snapshots in
+`data/`, **367 MoE-tagged papers** (50 in 2024, 122 in 2025, 195 in 2026); the 2024–2025 half was uncited in this file.
+
+**Gaps this register got right (now with three years of support):**
+
+| Gap in §1 | 2024–2026 evidence |
+|---|---|
+| 1.2 routing / hot-expert prediction / prefetch / expert cache | Fiddler 2402.07033, ProMoE 2410.22134, HOBBIT 2411.01433, 2502.05370, HybriMoE 2504.05897, MoE-CORE 2610.01950 — the same problem restated every year with better scheduling |
+| 1.7 disk streaming / expert offload | MoE-Lightning 2411.11217, HOBBIT, 2502.05370, OD-MoE 2512.03927, ZipMoE 2601.21198, PagedMoE 2611.03173 |
+| 1.6 scheduler / memory orchestration | EPS-MoE 2410.12247, Duplex 2409.01141, layered prefill 2510.08055, DuoServe-MoE 2509.07379, PDScope 2610.39216 |
+| 1.9 architecture targets | Mixture Compressor 2410.06270 (per-token expert redundancy), MoBiLE 2510.12357 (big/little experts), Mixture-of-Parallelisms 2607.01844 |
+
+**Gaps this register was missing (add them):**
+
+| New gap | Why | Where it lands |
+|---|---|---|
+| **Energy per token** | 2508.06978: SSD read energy per bit ≫ DRAM, so SSD tiering is a capacity claim, not an efficiency claim; SliceMoE 2512.12990 optimises under an energy budget | §1.10 observability; §10 caveats |
+| **Phase-split policy (prefill vs decode)** | PDScope 2610.39216, MoE-CORE 2610.01950, DuoServe-MoE 2509.07379: one transfer/prefetch policy cannot serve both phases | §1.2, §1.6 |
+| **Batching invalidates sparsity** | Lynx 2411.08982, Duplex 2409.01141: batch > 1 activates all experts and removes the bandwidth advantage | §1.6, §4 caveats |
+| **Safety of active-expert reduction** | SafeStart 2611.06147: fewer experts per token can weaken refusal while accuracy holds; RouteScan 2605.24817 audits via routing telemetry | §1.10, §4 |
+| **Cross-precision expert caching** | HOBBIT 2411.01433, MatMoE 2611.01704, PagedMoE 2611.03173: the cache key becomes (expert, precision) | §2 Layer 2 |
+
+**Gaps confirmed as out of scope:** disaggregated attention/FFN (Janus 2512.13525, MegaScale-Infer 2504.02263, AFD design space
+2605.28302), serverless experts (MoEless 2603.06350, EaaS 2509.17863, CrossPool 2606.24506), fleet resilience (Tarragon 2601.01310,
+ReviveMoE 2602.21140, partial-rank failures 2605.10670). All assume multi-device serving this engine does not have.
+
+**One number in §4 needs restating:** MoE-Lens (2504.09345) gives a roofline bound under a memory budget, and MoE-CAP (2412.07067) gives the
+cost/accuracy/performance triple. The 98% hit-rate path in §4 should be reported *against that bound*, with batch size and residency
+fraction, or it is not a measurable claim.
+
+
+## 13. ESP32 / MCU-CLASS LAYER — GAP REGISTER UPDATE
+
+**Corpus finding first.** Of the six snapshots in `data/`, exactly **one** paper names the ESP32 (2506.11003) and **15** more cover
+MCU / Cortex-M / RISC-V / extreme-edge deployment. The ESP32 paper is a codegen benchmark, not an inference result, so there is **no
+ESP32 inference measurement in this corpus**. Everything below is either arithmetic or transferred from adjacent hardware, and is
+labelled as such.
+
+### 13.1 The boundary in one table
+
+| Target | Weight bytes | vs 8 MB PSRAM |
+|---|---|---|
+| One Mellum2.1 expert, Q4 | ~100 MB | ~12× over |
+| 0.5B dense 4-bit | ~250 MB | ~31× over |
+| BitNet-1.58 3B | ~600 MB | ~75× over |
+| MCU-class models that do fit (2412.09289) | ≤64 KB | fits internal SRAM |
+
+The boundary is ~10^6 parameters. §8's checklist implicitly assumed desktop/GPU hardware and never said so; that is the gap.
+
+### 13.2 Three gaps this surfaced (none are P0)
+
+| Gap | Why it was missed | Cheapest fix |
+|---|---|---|
+| **No device-class contract** — no stated minimum RAM/FLOPs for a supported target | Every tier in §2 was written for a workstation; the bottom of the ladder was never defined | One sentence in the spec and README: "targets ≥ X GB usable RAM; MCU-class devices are clients", plus a `device_class` telemetry field |
+| **No companion-node protocol** — how a sensor client submits work and what it may cache is undefined | The engine has only ever had one process on one machine | Adopt hierarchical inference as the pattern (2406.09424): client accepts when confident, uploads otherwise; client holds no expert weights and no KV |
+| **No firmware review policy** — nothing says whether generated ESP-IDF code may enter the build | Firmware was never in scope, so the question never came up | State that firmware is hand-written or LLM-drafted-and-reviewed; 2506.11003's 29.4% best ESP-IDF pass@1 is the justification |
+
+### 13.3 Items deliberately left out, with reasons
+
+| Item | Reason for exclusion |
+|---|---|
+| MCU TinyML inference (2412.09289, 2406.09424) | Four orders of magnitude below the loaded model class |
+| On-device fine-tuning at the extreme edge (2603.09511) | 0.28M-param CCT with LoRA; the technique is real, the scale is not ours |
+| Ternary ROM/FPGA accelerators (2602.20662, 2510.15926) | Custom silicon; 3,306 TPS or 25 tok/s at 5 W is a different product |
+| LUT/zapped CPU kernels as a correctness path (2407.00088, 2512.06443) | Throughput techniques; the f32 oracle must stay exact for Gates A/B |
+| SBC LLM benchmarks (2511.07425, 2511.11624, 2505.06461) | Define the tier above MCU and the runtime-choice variance; not build targets |
+
+### 13.4 Two corrections to earlier reasoning
+
+1. **§4's 98% hit-rate discussion should name its hardware class.** A hit rate is a property of (trace, batch, residency, byte
+   budget). Adding the device class makes the comparison honest at every tier, including the one this section excludes.
+2. **"Parameter-efficient" is not "deployment-efficient".** 2608.00737 measured 13.5×/8.0× latency and 11.3×/5.6× energy penalties
+   for a parameter-efficient architecture on a scalar RISC-V core, with up to 43× earlier INT8 divergence. This belongs in §10's
+   caveats next to the existing RISC-V/KAN warning.
+
 **This file is the deliverable.** It maps every missing component against the latest papers and the Kraken repo, defines
 the 98% hit-rate path precisely, and gives a build order with gates. When the spec file becomes available, re-run the
 checklist in §8 against it.

@@ -1471,9 +1471,205 @@ called out inline.
    stable, and don't add distributed tiers before single-card determinism is proven.
 6. **Before finalizing any design decision that hinges on a specific recent claim,** re-sync the Sep–Oct 2026 paper index (§12) —
    several entries are preprints with author-reported claims.
+7. **Check §19 before treating any 2025–26 result as new.** The 2024–2025 record already contains per-expert I/O, proactive prefetch,
+   per-expert precision, phase-split scheduling and the energy counter-argument. §19.4 lists the deltas this forces on §1–§17; D1–D8 are
+   authoritative where they conflict with earlier wording.
+8. **Check §20 before assigning any work to an MCU or single-board client.** It is a boundary section: D9–D11 exclude MCU execution
+   by arithmetic, define a companion node as a client, and require firmware to be reviewed. No §16 phase changes.
+
+---
+
+## 19. FULL-SWEEP LAYER — 2024–2026 MoE EVIDENCE BASE
+
+**Why this section exists.** §12 was built from the Aug 2026 digest and the Sep–Oct 2026 arrivals; §13 indexes those. That left the
+first two years of the period uncovered: a scan of the three annual snapshots in `data/` finds **367 MoE-tagged papers** (50 in 2024,
+122 in 2025, 195 in 2026), and **none of the 2024–2025 IDs were cited anywhere in this document** before this section. The sweep is
+the fetch tool's engineering slice (`score >= 60`, six cs.* categories, 5,000/category cap), not every MoE paper ever posted.
+
+**Three eras, one sentence each.** 2024 proved expert offloading works and moved the problem to *granularity and scheduling*. 2025 made
+*overlap and phase-awareness* the design centre and put *energy* on the scoreboard. 2026 moved to *disaggregation and hardware co-design*
+and — relevant here — produced the first designs aimed squarely at the local single-workstation tier this spec targets.
+
+### 19.1 2024 — feasibility, then the first schedulers
+
+| arXiv | Title | What it establishes | Where it lands |
+|---|---|---|---|
+| 2402.07033 (Feb) | Fiddler: CPU-GPU Orchestration for Fast Inference of MoE Models | Keeps the CPU as a *compute* participant and schedules around the GPU, instead of treating host memory as a dumb shelf; the alternative — frequent small transfers — is what it beats | §1.2, §2 Layer 2, §9 Phase B |
+| 2401.08383 (Jan) | Exploiting Inter-Layer Expert Affinity for Accelerating MoE Inference | Consecutive layers route correlated experts; affinity is a placement/communication lever, not just a cache hint | §2 Layer 9, §4 predictor stack |
+| 2409.01141 (Sep) | Duplex: A Device for LLMs with MoE, GQA and Continuous Batching | Continuous batching turns sparse per-token expert use into dense DRAM traffic; the memory system, not the FLOPs, is the design target | §1.6, §2 Layer 4 |
+| 2410.06270 (Oct) | Mixture Compressor for MoE LLMs Gains More | Many tokens need one expert, not top-k; activated experts are redundant, and mixed precision per expert is a capacity lever | §2 Layer 0/2 |
+| 2410.12247 (Oct) | EPS-MoE: Expert Pipeline Scheduler | Pipelines expert execution to hide load and communication; scheduling granularity is per-expert, not per-layer | §1.6, §2 Layer 4 |
+| 2410.22134 (Oct) | ProMoE: Fast MoE Serving using Proactive Caching | Prefetch *before* the router needs the expert (proactive) beats react-on-miss caching; hit rate is a scheduling property | §2 Layer 2, §4 |
+| 2411.08982 (Nov) | Lynx: Dynamic Batch-Aware Expert Selection | **Batching forces all experts active and erases MoE's memory-bandwidth advantage**; selection must depend on the batch | §1.6, §4, §10 |
+| 2411.01433 (Nov) | HOBBIT: Mixed Precision Expert Offloading | Offload precision per expert, not per model; prefetch at adaptive granularity; the win is bytes moved per token | §1.2, §2 Layer 0/6 |
+| 2411.11217 (Nov) | MoE-Lightning: High-Throughput MoE Inference on Memory-Constrained GPUs | Throughput on a small GPU is an offload-pipeline design problem; overlap and cache policy dominate kernel choice | §2 Layer 6, §9 |
+| 2412.07067 (Dec) | MoE-CAP: Benchmarking Cost, Accuracy and Performance of Sparse MoE Systems | Cost/accuracy/performance trade off jointly; single-number claims (tokens/s, hit rate) hide the trade | §10, §17 |
+| 2412.14219 (Dec) | A Survey on Inference Optimization Techniques for MoE Models | 2024 taxonomy of the whole space — useful as the era's map | §11, reading order |
+
+**Takeaway:** the three levers §4 and §12 treat as the frontier — exact expert-granularity I/O, proactive prefetch, per-expert precision —
+are all present in 2024. What 2024 adds that the Oct-2026 layers under-weight is Lynx's negative result: **any hit-rate number measured at
+batch 1 does not transfer to batch > 1**, because batching densifies expert activation.
+
+### 19.2 2025 — overlap, phase-awareness, and the energy counter-argument
+
+| arXiv | Title | What it establishes | Where it lands |
+|---|---|---|---|
+| 2502.05370 (Feb) | Taming Latency-Memory Trade-Off in MoE Serving via Fine-Grained Expert Offloading | Coarse expert caching wastes capacity; fine-grained offload decisions trade latency against memory explicitly | §1.2, §2 Layer 2/6 |
+| 2504.05897 (Apr) | HybriMoE: Hybrid CPU-GPU Scheduling and Cache Management | Joint scheduling + cache policy on a hybrid CPU-GPU path; either alone leaves throughput on the table | §2 Layer 2/7 |
+| 2504.09345 (Apr) | MoE-Lens: Towards the Hardware Limit of High-Throughput MoE Serving | Gives a **roofline for MoE under a memory budget** — the upper bound any cache/prefetch scheme should be measured against | §4, §9 measurement gate |
+| 2509.07379 (Sep) | DuoServe-MoE: Dual-Phase Expert Prefetch and Caching for QoS | Prefill and decode want different prefetch policies; a single policy cannot hold SLOs across both | §1.6, §2 Layer 2 |
+| 2510.08055 (Oct) | From Tokens to Layers: Stall-Free Scheduling with Layered Prefill | Chunked prefill is the wrong axis for MoE; scheduling along **layers** removes stalls that token-chunking creates | §1.6, §2 Layer 4 |
+| 2510.10302 (Oct) | SP-MoE: Speculative Decoding and Prefetching for MoE Inference | SD + prefetch **contend for the same CPU-GPU bandwidth**; combining two "free" wins can be net negative | §1.5, §2 Layer 5 |
+| 2508.21706 (Aug) | Hiding Offloading Latency with Speculative Decoding | The opposite result under a different overlap design: speculation can hide transfer latency | §2 Layer 5 |
+| 2503.09716 (Mar) | MoE-Gen: Module-Based Batching on a Single GPU | Batch the *modules* (attention vs experts) separately; one global batch size is wrong for MoE | §1.6 |
+| 2510.12357 (Oct) | MoBiLE: Mixture of Big Little Experts on Consumer GPU | Heterogeneous expert sizes on one consumer GPU; capacity and bandwidth can be traded per expert | §2 Layer 0/2 |
+| 2512.13525 (Dec) | Janus: Disaggregating Attention and Experts | Attention and FFN have different scaling behaviour; co-locating them forces a bad compromise | §2 Layer 3/9 (design only) |
+| 2504.02263 (Apr) | MegaScale-Infer: Disaggregated Expert Parallelism | Disaggregated EP for serving scale; the expert pool becomes an independently scaled service | §2 Layer 9 (out of scope) |
+| 2508.06526 (Aug) | PiKV: KV Cache Management for MoE | MoE sparsifies compute but **not** KV: KV stays dense and globally synced, so MoE serving is KV-bound too | §2 Layer 3, §4 |
+| 2512.12990 (Dec) | SliceMoE: Bit-Sliced Expert Caching under Miss-Rate Constraints | Cache design can be stated as a miss-rate constraint with an energy budget instead of a hit-rate target | §4, §2 Layer 2 |
+| 2508.06978 (Aug) | SSD Offloading for MoE Weights Considered Harmful in Energy Efficiency | **SSD read energy per bit is far above DRAM's**; offloading buys capacity, not efficiency, and can lose on energy/token | §3, §4, §10 |
+| 2512.14080 (Dec) | SonicMoE: IO and Tile-Aware Optimizations | Modern MoE trends to finer experts + higher sparsity; kernels must be tile-aware, not just expert-aware | §2 Layer 1/2 |
+
+**Takeaway:** 2025 replaces one metric with two. A hit rate without a stall/bandwidth budget (MoE-Lens) and an energy/token figure
+(2508.06978, SliceMoE) is not a result. It also splits the scheduler by phase (DuoServe-MoE, layered prefill) — which this spec's single
+"Layer 4 scheduler" does not yet express.
+
+### 19.3 2026 outside the Aug–Oct windows — phase policy, eviction economics, local tier
+
+| arXiv | Title | What it establishes | Where it lands |
+|---|---|---|---|
+| 2605.28302 (May) | How Far Can Disaggregation Go? (Attention-FFN Disaggregation design space) | AFD is now the third disaggregation axis after chunked prefill and P/D; the design space is mapped, not guessed | §1.6, §2 Layer 3/9 |
+| 2606.10493 (Jun) | Cloud-Grade SLOs for Local MoE through CPU-GPU Hybrid Design | Names the four local-tier gaps: capacity-reduced models, >30 s TTFT past 12K prefill, <20 tok/s decode, poor co-scheduling | §3, §4, §5 |
+| 2611.11533 (Nov) | Ostinato: Resident Experts in Every Forward Pass | **llama.cpp's expert cache skips forward passes over 32 tokens to keep decode experts cached**, so agents stall 2.1–2.8 s after tool output; resident-expert staging fixes both phases | §1.1, §5, §9 Phase A baseline |
+| 2602.03495 (Feb) | DALI: Workload-Aware Offloading for Local PCs | Workload class (chat vs long prefill vs agent) should choose the offload policy, not one static config | §1.6, §9 |
+| 2603.01058 (Mar) | TriMoE: GPU + AMX CPU + DIMM-NDP Offloading | "Cold expert" is not one class: a warm set exists between hot and cold and belongs on a third tier | §2 Layer 2/6 |
+| 2610.39216 (Oct) | PDScope: Breaking the Prefill-Decode Seesaw | Under low batching, prefill is compute-bound and wants aggressive loading while decode is I/O-bound and wants conservative transfers; one phase-agnostic policy loses both | §1.6, §4 |
+| 2610.01950 (Oct) | MoE-CORE: Coordinated Expert Offloading and Residency | Stage **complete expert layers** in alternating buffers during prefill; stage rows during decode | §2 Layer 6 |
+| 2610.40305 (Oct) | Rimuru: Elastic Expert Offloading with Unified Memory | Weight residency and KV residency share one budget and must be re-partitioned at runtime | §2 Layer 3/4 |
+| 2611.15842 (Nov) | Fewer Expert Transfers Without Changing Routing | Measured transfers: fewer routing *switches* is not fewer *copies*; routing-trained "stability" proxies can be wrong | §1.2, §4 |
+| 2611.03173 (Nov) | PagedMoE: Cross-Precision Expert Caching | Cache experts at several precisions and pick per token — the cache key becomes (expert, precision) | §2 Layer 0/2 (v0.2) |
+| 2608.21240 (Aug) | SPICE: Speculative Prefetch with Low-Rank Expert Surrogates | Prefetch decisions can run on cheap low-rank surrogates rather than the full gate | §4 predictor stack |
+| 2608.11688 / 2608.21614 (Aug) | APEX; SAEM | Edge prefetch must adapt to available bandwidth; chain-of-thought phases have different expert locality | §2 Layer 2/7 |
+| 2609.04244 (Aug) | MonoMoE: Fused Mega-kernel for Quantized MoE Decode | At decode batch sizes, token-major grouped GEMMs pay tile padding; fused expert-major kernels do not | §2 Layer 1 |
+| 2603.08960 (Mar) | The qs Inequality: Quantifying MoE's Double Penalty at Inference | Routing fragments microbatches (less weight reuse) *and* the resident expert pool steals HBM from KV | §3, §4, §10 |
+| 2611.06147 (Nov) | SafeStart: The Safety Cost of Active Expert Reduction | Serving methods that run fewer experts per token can **weaken refusal of harmful requests** while passing accuracy benchmarks | §4, §10 |
+| 2605.24817 (May) | RouteScan: Auditing MoE Safety via Routing Telemetry | Routing telemetry is a non-intrusive audit channel — cheap to log next to hit/miss counters | §2 Layer 10 |
+
+**Takeaway:** 2026's message for this spec is that the scheduling unit is the **phase** and the transfer unit is the **expert layer stage**,
+not the expert row; and that "run fewer experts" has a safety bill that accuracy benchmarks do not show.
+
+### 19.4 Deltas this forces in the spec (authoritative; these override earlier wording)
+
+- **D1 — §4 metrics.** A hit-rate claim must be reported with (a) stall time and bytes/token, (b) energy/token, (c) phase split
+  (prefill vs decode). Sources: MoE-Lens 2504.09345, 2508.06978, SliceMoE 2512.12990, PDScope 2610.39216.
+- **D2 — §2 Layer 2 slot model.** `slot_bytes` fixed per layer is a v0.1 simplification, not a property of MoE. Record it as such;
+  mixed-precision and cross-precision caching are established (HOBBIT 2411.01433, MatMoE 2611.01704, PagedMoE 2611.03173).
+- **D3 — §2 Layer 6 prefetch target.** Two policies, not one: stage complete next-layer expert sets during prefill (MoE-CORE
+  2610.01950), stage routed rows during decode. A single policy under-serves one phase.
+- **D4 — §1.6 batching caveat.** Batch > 1 densifies expert activation and removes the bandwidth advantage (Lynx 2411.08982,
+  Duplex 2409.01141). A single-user CLI is the favourable case; state that rather than generalizing.
+- **D5 — §9/§16 build order.** Insert a measurement gate after Phase A: roofline bound (2504.09345) + cost/accuracy/performance triple
+  (2412.07067) before any predictor work. Without the bound, "98%" is unfalsifiable.
+- **D6 — §1.2 selection shortcuts.** Reducing active experts changes outputs and can weaken refusal (SafeStart 2611.06147); batch-aware
+  selection changes outputs by construction (Lynx). Any such shortcut needs its own gate, not a footnote.
+- **D7 — §5 Strata lessons.** The closest peers to this engine are the 2025–26 local-PC designs — DALI 2602.03495, 2606.10493, Ostinato
+  2611.11533, TriMoE 2603.01058 — not cloud serving systems. Benchmark against them first.
+- **D8 — §12 numbers caveat.** Several 2025 results are measured at batch ≥ 8 with SLO targets; do not transpose their hit rates to a
+  batch-1 CLI. This is the same caveat as D1(c), restated because it is the most common misreading.
+
+### 19.5 Three Oct-2026 claims the longer record qualifies
+
+1. **"98% hit at 45% residency."** SeqMoE (2609.12978) is a forecast+eviction system on a specific trace. 2024–25 systems report lower
+   hit rates at comparable budgets (HOBBIT, 2502.05370, ProMoE). Keep 98% as an upper bound *with a named trace and batch size*.
+2. **"Speculation + offload always helps."** SP-MoE (2510.10302) shows bandwidth contention; 2508.21706 shows the opposite under a
+   different overlap design. It is a gate, not a free win.
+3. **"SSD tier beats RAM."** True for capacity, false for energy per bit (2508.06978). Claim capacity, and report energy.
+
+### 19.6 Reading order for the era
+
+1. 2411.08982 (Lynx) — the batching negative result that bounds every other claim.
+2. 2504.09345 (MoE-Lens) — the roofline to measure against.
+3. 2508.06978 — the energy counter-argument to SSD tiering.
+4. 2610.39216 (PDScope) + 2610.01950 (MoE-CORE) — phase policy and stage-granular transfers.
+5. 2611.11533 (Ostinato) — what the llama.cpp baseline actually does above 32 tokens per forward.
+
+## 20. ESP32 / MCU-CLASS LAYER — SCOPE BOUNDARY AND COMPANION-NODE INTERFACE
+
+**Why this section exists.** §19 swept MoE serving hardware down to weak GPUs and CPUs, then stopped at SBC class. A scan of the
+same six snapshots in `data/` for `ESP32|ESP-IDF|ESP8266|Espressif` returns **one** paper; a wider scan for MCU / Cortex-M /
+RISC-V / extreme-edge terms returns **16** that bear on the question. This section records what that literature does and does not
+license. It is a boundary section: nothing here moves a §16 phase or promotes a component.
+
+### 20.1 The arithmetic that settles it
+
+Vendor specs (hardware facts, not paper claims): ESP32-S3 — 240 MHz dual Xtensa LX7, 512 KB SRAM, up to 8 MB octal PSRAM,
+128-bit int8/int16 vector ops. ESP32-C6 — 160 MHz RISC-V plus an LP core, 512 KB SRAM. ESP32 — 240 MHz dual LX6, 520 KB SRAM,
+4–8 MB PSRAM. None has an MMU; all run FreeRTOS, not an OS that could host this engine.
+
+| Target | Weight bytes (arithmetic estimate) | vs 8 MB PSRAM |
+|---|---|---|
+| One Mellum2.1 expert, Q4_K_M (~180M params/expert from §1) | ~100 MB | ~12× over |
+| 0.5B dense model, 4-bit | ~250 MB | ~31× over |
+| BitNet-1.58 3B (the operating point of 2407.00088 / 2510.15926) | ~600 MB | ~75× over |
+| 0.28M-param CCT from 2603.09511, INT8 | ~0.28 MB | fits internal SRAM |
+| Quantized transformer from 2412.09289 | ≤64 KB | fits internal SRAM |
+
+The line is not "small model"; it is **~10^6 parameters and ~10^8 FLOPs per inference**. Below it the MCU literature applies and
+thrives. Above it, no quantization trick closes a 10–75× capacity gap, and §19's energy counter-argument (2508.06978) only widens
+it. "Quantize it and it fits" is false at this tier.
+
+### 20.2 What the corpus actually says about ESP32
+
+| arXiv | Title | What it establishes | Where it lands |
+|---|---|---|---|
+| 2506.11003 (Jun 2025) | EmbedAgent: Benchmarking LLMs in Embedded System Development | The **only** paper in `data/` that names the ESP32. Embedbench: 126 cases, 9 components, 3 platforms, 10 LLMs. Cross-platform migration to **ESP-IDF: best model 29.4% pass@1**, against 73.8% for MicroPython on the RP2040. Arduino→ESP32 migration 21.4%, rising to 27.8% with RAG + compiler feedback. Schematic-grounded programming: DeepSeek-R1 55.6% with schematics, 50.0% generating them; 65.1%/53.1% with RAG + compiler feedback | §20.3 D11 |
+| 2608.03589 (Aug 2026) | Design-Time Optimization of DNNs for Intermittent Learning on Microcontrollers | Per-layer energy prediction for both inference and training, including intermittent checkpointing, used in multi-objective design-time search instead of deploy-and-measure; 16.6% weighted absolute percentage error on a Cortex-M4 | D9, §17 checklist |
+| 2412.09289 (Dec 2024) | Optimising TinyML with Quantization and Distillation of Transformer and Mamba Models | Quantized transformer fits **64 KB RAM**; Mamba fits **32 KB** uncompressed — i.e. MCU-class models are ≤10^6 params, which is the boundary this section draws | D9 |
+| 2603.09511 (Mar 2026) | TrainDeeploy: Hardware-Accelerated PEFT of Small Transformer Models at the Extreme Edge | On-device LoRA on a heterogeneous RISC-V SoC: −23% dynamic memory, 15× fewer trainable params/gradients, 1.6× less memory transfer, 11 trained images/s on a 0.28M-param CCT | D10 |
+| 2406.09424 (Jun 2024) | Improved Decision Module Selection for Hierarchical Inference in Resource-Constrained Edge Devices | The correct MCU pattern: accept easy samples locally, offload the rest; hierarchical inference beats local-only, cloud-only and split inference on the accuracy/throughput/cost trade | D10 |
+| 2608.00737 (Aug 2026) | An Embedded RISC-V Evaluation of KANs in Hard-Constrained Recurrent PINNs | Parameter efficiency does not transfer to scalar cores: KAN 13.5×/8.0× slower and 11.3×/5.6× more energy than MLP under PTQ, up to 43× earlier divergence under INT8 | §20.4 falsifier 2 |
+| 2511.07425 (Nov 2025) | An Evaluation of LLM Inference on Popular Single-board Computers | SBCs reliably serve models up to 1.5B params; runtime choice alone moves throughput 4× and power 30–40%. This is the tier *above* MCU and the smallest one this engine could ever be asked about | D9 boundary |
+
+Adjacent results that inform the CPU fallback path but not the MCU question: 2407.00088 (T-MAC, 4× throughput and 70% less energy
+than llama.cpp; 11 tok/s on a Raspberry Pi 5 for BitNet-1.58-3B), 2512.06443 (Vec-LUT, 4.2× over LUT baselines, in llama.cpp),
+2506.17870 (NestQuant, nested INT8/INT6 with ~78% less switching overhead), 2602.20662 and 2510.15926 (ternary ROM / FPGA
+accelerators — custom silicon, not targets here), 2512.19741 (ViT-Huge → 76% less peak memory, 6× lower latency), 2511.11624
+(SLM energy on Pi 5 / Jetson), 2505.06461 (CPU beats GPU on one iPhone case), 2503.09114 (quantization lowers memory but does not
+remove the bottleneck).
+
+### 20.3 Deltas this forces (D9–D11, authoritative with D1–D8)
+
+- **D9 — No MCU execution target, permanently.** Not deferred: excluded by arithmetic. State a minimum-RAM contract in §3 and the
+  README (e.g. "targets ≥ N GB usable RAM; MCU-class devices are clients"). Record device class in the telemetry header so runs are
+  never compared across classes.
+- **D10 — Companion nodes are clients, not shards.** An ESP32 sensor/telemetry board may feed the engine and may run a ≤10^6-param
+  local model, but it never holds expert weights or KV. The client-side decision is hierarchical inference (2406.09424): accept when
+  confident, upload the rest. If on-device adaptation is ever wanted, the published path is LoRA-only (2603.09511), and it is still
+  out of scope.
+- **D11 — Firmware is a reviewed artifact.** If the project ships ESP-IDF code (telemetry board, fan/power controller), it is
+  hand-written or LLM-drafted-and-reviewed. 2506.11003's best ESP-IDF pass@1 is 29.4% on simple cases and 21.4% on Arduino→ESP32
+  migration; RAG plus compiler feedback recovers only to 27.8%. Unreviewed emission is a defect source, not a shortcut.
+
+### 20.4 Pre-registered falsifiers
+
+1. **Any claim that Mellum2.1 (or any ≥0.5B model) runs on an ESP32** is wrong by 12–31× on capacity alone; check bytes, not vibes.
+2. **"Fewer parameters, therefore faster on the target"** fails on scalar cores: measured 13.5×/8.0× latency and 11.3×/5.6× energy
+   penalties for the parameter-efficient architecture, plus 43× earlier INT8 divergence (2608.00737).
+3. **"The LLM can write the firmware"** fails at 29.4% pass@1 on ESP-IDF with the strongest model tested; review is mandatory.
+4. **"The MCU is part of the memory tier"** misreads §2. A tier is a byte budget the engine pages into; 8 MB is below one expert.
+
+### 20.5 Reading order
+
+1. 2506.11003 — the only ESP32 measurement here, and it is about codegen, not inference.
+2. 2608.03589 — how to decide an MCU deployment without deploying.
+3. 2412.09289 — what "fits on an MCU" actually means (64 KB / 32 KB).
+4. 2603.09511 — the strongest on-device adaptation result at that scale.
+5. 2406.09424 — the client/host split, which is the only role this engine gives an MCU.
 
 ---
 
 *Master spec assembled from: AI_AGENT_MOE_STREAMING_ENGINE_SPEC gap analysis (spec file not sandbox-accessible; goal statement used
 as spec) + Kraken repo scan + Aug 2026 arxiv cs.LG digest (ML-NEW-TECH.md, 992 papers, 3–7 Aug, in repo) + Strata
-HOW_IT_WORKS.md + DETAILS.md + Sep–Oct 2026 arxiv layer (surfaced through ~7 Oct 2026). Current date: October 2026.*
+HOW_IT_WORKS.md + DETAILS.md + Sep–Oct 2026 arxiv layer (surfaced through ~7 Oct 2026) + 2024–2026 full-sweep layer (§19: 367 MoE-tagged papers across the three annual snapshots in `data/`) + ESP32/MCU-class layer
+(§20: the one ESP32-named paper in `data/` plus 15 MCU/extreme-edge papers; scope boundary, not a build phase). Current date:
+November 2026.*

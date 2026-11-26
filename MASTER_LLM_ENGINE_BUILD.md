@@ -441,13 +441,65 @@ Re-sync coverage: Oct 2026 arxiv (partial; crawl through ~7 Oct) + targeted GitH
 
 **Do not change the build decision from the re-sync:** substrate = ggml/llama.cpp as tensor+quant+CPU+backend layer; implement the MoE router→expert cache→SSD I/O→prefetch→eviction→miss-fallback layer yourself; reuse FlashInfer (CUDA), hipBLAS/hipBLASLt + ROCm attention (ROCm), ggml MMQ, AWQ/GPTQ-derived weights + GGUF K/i-quants; use vLLM/SGLang as design references. Phase order (A→B→C→D→E) unchanged. 98% path still centers on SSD-LLaMA-style exact expert tiering + Linux read-ahead + IO prefetch + FATE prefetch + same-layer pre-attention predictor + KVFetch positional-recall + SeqMoE-style forecast-driven eviction as the large optimization target, with determinism guardrail + losslessness audit from day one.
 
+## C.14 — 2024–2026 full-sweep delta
+
+The component map above was built from the Aug–Oct 2026 window. The three annual snapshots add **367 MoE-tagged papers** for 2024–2026
+(50 / 122 / 195), and the 2024–2025 half was uncited here. Full detail is **Part A §19**; this is the build-facing delta only.
+
+**Build decision: unchanged.** Substrate (ggml/llama.cpp), the implement-yourself layer (router → expert cache → SSD I/O → prefetch →
+eviction → miss fallback), and phases A→E all stand. Three years of systems papers converge on exactly that layer being the work.
+
+**Changes to §C entries:**
+
+| §C entry | Delta from the sweep |
+|---|---|
+| C.2 Model loading + quantization ladder | Per-expert precision is established, not speculative (HOBBIT 2411.01433, MatMoE 2611.01704, PagedMoE 2611.03173). Keep one precision for Phase A/B; make `slot_bytes` metadata-derived so a mixed-precision variant needs no layout rewrite |
+| C.3 KV cache + attention | PiKV 2508.06526: KV stays dense under MoE, so it competes with the expert pool for the same budget. Rimuru 2610.40305 shows the split must be re-partitionable at runtime. Do not treat KV as free because compute is sparse |
+| C.4 MoE routing + expert system | Lynx 2411.08982: batch > 1 forces all experts active — the batch-1 CLI is the favourable case, and the hit rate is not portable. 2611.15842: count real transfers, not routing switches |
+| C.6 Scheduler + memory orchestration | Split by phase: prefill stages next-layer expert sets (MoE-CORE 2610.01950), decode stages routed rows (PDScope 2610.39216). §C.6 currently implies one policy |
+| C.7 Disk streaming / expert offload | Capacity claim only — 2508.06978 shows SSD read energy per bit ≫ DRAM. Report bytes/token and (optionally) energy/token next to hit rate |
+| C.11 Observability | Add bytes read per token, distinct experts per layer per token, and an explicit "decode-only" phase label. RouteScan 2605.24817 shows routing telemetry is cheap to log and useful for audits |
+| C.12 Agentic runtime (optional) | Ostinato 2611.11533 is the relevant baseline: llama.cpp's expert cache skips forward passes over 32 tokens, so local agents stall after each tool output. If the agent path is ever built, this is the known failure to design against |
+| Phase C speculative decoding | Demote from planned feature to paired experiment: 2508.21706 (helps by hiding latency) vs SP-MoE 2510.10302 (loses to bandwidth contention). Pre-register both measurements |
+
+**Measurement gate to insert after Phase A:** roofline bound under the memory budget (MoE-Lens 2504.09345) plus the cost/accuracy/performance
+triple (MoE-CAP 2412.07067). Without it the 98%-style target in §C.4 and §D cannot be falsified.
+
+**What stays out (and why):** disaggregation (Janus 2512.13525, MegaScale-Infer 2504.02263, AFD design space 2605.28302), serverless
+experts (MoEless 2603.06350, EaaS 2509.17863, CrossPool 2606.24506), fleet resilience (Tarragon 2601.01310, ReviveMoE 2602.21140) — all
+multi-device/multi-tenant. Mixed-precision slots and cross-precision caching are the only deferred items worth a v0.2 slot.
+
+## C.15 — ESP32 / MCU-class delta
+
+The 2024–2026 sweep stopped at SBC class. A scan of the same six snapshots for `ESP32|ESP-IDF|ESP8266|Espressif` returns **one** paper;
+a wider MCU/extreme-edge scan returns **16**. Full detail is **Part A §20**; this is the build-facing delta only.
+
+**Build decision: unchanged, and now bounded.** Substrate, the implement-yourself layer, and phases A→E all stand. What changes is that
+the bottom of the hardware ladder is written down: a target needs hundreds of MB of RAM because one Q4 expert is ~100 MB, and an
+ESP32-S3 has at most 8 MB of PSRAM. MCU-class devices are clients, not targets.
+
+| §C entry | Delta from the MCU record |
+|---|---|
+| C.1 Target hardware / tiers | Add the device-class contract: minimum RAM, and a `device_class` field in the run manifest. The tier table in §C.1 has no bottom row today |
+| C.2 Model loading + quantization | No change. "Quantize it and it fits" is false below SBC class: 0.5B at 4-bit ≈250 MB against 8 MB PSRAM |
+| C.4 MoE routing + expert system | No change on the host. On a companion MCU the decision is accept-vs-offload (2406.09424), not top-k |
+| C.11 Observability | Add `device_class` to the report header. An MCU may be an out-of-band sensor feeder; tag its samples separately from per-token timing |
+| C.12 Agentic / structured output | If firmware ever enters scope, ESP-IDF is the weakest measured target: 29.4% best pass@1 across 10 LLMs (2506.11003), 21.4%→27.8% on Arduino→ESP32 migration. Draft-and-review, never an unreviewed build step |
+| Kernel/backend notes | LUT mpGEMM (2407.00088, 2512.06443) is a CPU-path throughput option, not a correctness path — keep the f32 oracle for Gates A/B |
+
+**Measurement gap to close (cheap):** the gate report should be self-describing. One string — `device_class: desktop-gpu | desktop-cpu | sbc | mcu-client` — plus the RAM budget. Without it, a Pi-class result and a 24 GB GPU result can be compared as if they were one experiment.
+
+**What stays out (and why):** MCU inference (2412.09289 fits a transformer in 64 KB, four orders of magnitude below this engine's model
+class), on-device fine-tuning at the extreme edge (2603.09511, 0.28M params), ternary ROM/FPGA accelerators (2602.20662, 2510.15926 —
+custom silicon), and design-time MCU energy prediction (2608.03589 — useful before deploying an auxiliary model, not for the engine).
+
 ## Index — where everything lives in this master document
 
 - **§C (Component build map)** — the actionable list. Each component: what it is, what it maps to (papers/code/subsystems), reusable vs build, dependencies, build order/phase, notes. Start here.
 - **§D (Implementation sequencing)** — phased roadmap with explicit dependencies and within-phase build sequence + gates. Read after §C to know the order.
 - **§E (What "best to implement" means)** — summarize: implement the MoE router→expert cache→SSD I/O→prefetch→eviction→miss-fallback layer yourself; reuse ggml/llama.cpp as substrate + FlashInfer (CUDA) / hipBLAS/hipBLASLt + ROCm attention (ROCm) + ggml MMQ + AWQ/GPTQ-derived weights + GGUF K/i-quants; use vLLM/SGLang as design references; most high-impact recent papers are paper-only (SpecPrefetch, TaSQ, BitNest, SEED, Flash-OPD, Disaggregated Quantization, Edge0 have code).
-- **Part A (ENGINE_MASTER_SPEC.md)** — spec gap analysis + Sep–Oct 2026 fresh paper layer (§12) + consolidated paper index (§13) + Strata lessons (§5/§14) + tiered config matrix (§3/§13) + 98% hit-rate path (§4) + missing-spec checklist (§8/§15) + build order (§9/§16) + caveats (§10/§17). Cite §12/§13 for any paper referenced in §C.
-- **Part B (IMPLEMENTATION_RECOMMENDATION.md)** — substrate decision (§1) + implement/reuse ranking (§2) + code availability (§3) + phased roadmap (§4) + 98% path (§5) + what-not-to-do (§6) + bottom-line build-this-first list (§7). Cite §3 for code availability, §4 for full gate list.
+- **Part A (ENGINE_MASTER_SPEC.md)** — spec gap analysis + Sep–Oct 2026 fresh paper layer (§12) + consolidated paper index (§13) + Strata lessons (§5/§14) + tiered config matrix (§3/§13) + 98% hit-rate path (§4) + missing-spec checklist (§8/§15) + build order (§9/§16) + caveats (§10/§17) + **2024–2026 full-sweep layer (§19)** + **ESP32/MCU-class scope boundary (§20)**. Cite §12/§13 for Aug–Oct 2026 papers, §19 for the 2024–2025 era and 2026 items outside those windows, and §20 for anything involving MCUs, SBCs or companion boards.
+- **Part B (IMPLEMENTATION_RECOMMENDATION.md)** — substrate decision (§1) + implement/reuse ranking (§2) + code availability (§3) + phased roadmap (§4) + 98% path (§5) + what-not-to-do (§6) + bottom-line build-this-first list (§7) + **2024–2026 evidence re-ranking (§8)**. Cite §3 for code availability, §4 for full gate list, §8 for the promote/hold/demote verdicts that supersede §7 where they differ.
 
 **Caveats (repeated from source docs):**
 - The attached AI_AGENT_MOE_STREAMING_ENGINE_SPEC.md is on the user's Windows machine and is not reachable from this sandbox — this document uses the goal statement as the spec; when the spec file is available, re-run the checklist in Part A §8/§15 against it.
@@ -457,15 +509,22 @@ Re-sync coverage: Oct 2026 arxiv (partial; crawl through ~7 Oct) + targeted GitH
 - llama.cpp mmap/lazy-mode is OS paging / on-demand reads of certain large tensors — not a router-aware SSD expert cache + prefetch scheduler.
 - WebGPU is a distinct target with real batch-one dispatch overhead — not a free CUDA replacement.
 - Don't assume CUDA MMQ kernels map to ROCm/Vulkan/OpenVINO/WebGPU for a custom packed expert type.
+- The 2024–2025 record is now covered (Part A §19, §8 of Part B); several of those results are measured at batch ≥ 8 with SLO targets, so their hit rates do not transfer to a batch-1 CLI.
+- SSD tiering is a capacity argument; SSD read energy per bit is well above DRAM's (2508.06978), so do not present it as an efficiency win.
+- Only one paper in `data/` names the ESP32 (2506.11003), and it benchmarks LLM codegen, not inference. There is no ESP32 inference
+  measurement in this corpus; anything beyond "it is a client, not a target" is arithmetic or extrapolation from SBC results.
 
 ---
 
-# Part A — ENGINE_MASTER_SPEC.md (preserved in full)
+# Part A — ENGINE_MASTER_SPEC.md
 
-$(cat ENGINE_MASTER_SPEC.md)
+*Embedded by reference: see `ENGINE_MASTER_SPEC.md` in this repo (1,675 lines, §§1–20).*
+
+> Earlier revisions of this file carried literal `$(cat ENGINE_MASTER_SPEC.md)` lines here — unexpanded shell, not content. Nothing was
+> ever embedded at this point. The file is a sibling document and stays canonical for §§1–20; §C/§D above cite it by section number.
 
 ---
 
-# Part B — IMPLEMENTATION_RECOMMENDATION.md (preserved in full)
+# Part B — IMPLEMENTATION_RECOMMENDATION.md
 
-$(cat IMPLEMENTATION_RECOMMENDATION.md)
+*Embedded by reference: see `IMPLEMENTATION_RECOMMENDATION.md` in this repo (384 lines, §§1–9).*

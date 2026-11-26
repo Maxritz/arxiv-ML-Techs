@@ -472,3 +472,81 @@ Explicitly not in this interface, each with the reason it is deferred rather tha
 | `ENGINE_MASTER_SPEC.md` | §4 | the metrics here are the two numbers §4 requires |
 | `FRESH_LLM_ENGINE_GAPS.md` | §3 gates | Gate B/C conditions; §5 step 5 is `L` then `P` |
 | `ML-NEW-TECH.md` | §32.1, §32.8 | PSR mechanism and the mapping table this design follows |
+
+
+---
+
+## 14. 2024–2026 evidence for the v0.1 choices
+
+This interface was designed from the Aug–Oct 2026 window. The repo's three annual snapshots add **367 MoE-tagged papers** for
+2024–2026 (50 / 122 / 195), and the 2024–2025 half was not cited here before. Each v0.1 decision is checked below; the point is to know
+which choices are *settled*, which are *deliberate simplifications*, and which are *on watch*.
+
+| Decision in this doc | Evidence | Status |
+|---|---|---|
+| Expert-granularity I/O with fixed per-expert stride (§5) | Fiddler 2402.07033; MoE-Lightning 2411.11217; HOBBIT 2411.01433; fine-grained offloading 2502.05370 | **Settled.** Per-expert is the right unit; nothing in three years argues for layer- or tensor-granularity reads on this tier |
+| Adjacent-layer gate predictor (§3.1) | Inter-layer expert affinity 2401.08383; ProMoE 2410.22134; SPICE 2608.21240 (cheaper surrogates exist) | **Settled as the cheapest member of the family.** SPICE says a low-rank surrogate can replace the full gate later; not for v0.1 |
+| `L` is per-layer, per-token, reset each token (§3) | DuoServe-MoE 2509.07379 (phase-dependent locality); SAEM 2608.21614 (CoT phases differ) | **Deliberate simplification.** Valid for batch-1 decode; a prefill path would want the reset rule revisited |
+| No hysteresis / no retention (§3.2) | SliceMoE 2512.12990; When Fancy Eviction Fails 2609.28870 | **Settled for v0.1.** Retention is a state machine with its own gate; the eviction literature does not reward it at this scale |
+| Fixed `slot_bytes` per layer (§4) | HOBBIT 2411.01433; MatMoE 2611.01704; PagedMoE 2611.03173 | **Deliberate simplification.** Precision heterogeneity is real and is the first thing v0.2 should change; keep `slot_bytes` derived, never hard-coded |
+| `beta` bias toward `L` (§3.3) | Lynx 2411.08982 (selection changes outputs); SafeStart 2611.06147 (fewer active experts weaken refusal); Prefetch-Steered Routing 2610.34721 | **On watch.** `beta` changes routing, so it changes outputs. It must be reported with the beta value and a refusal/quality check, not folded into a speed number |
+| LRU victim, ties by slot index (§4) | 2508.06978 (energy), 2512.12990 (miss-rate constraint), 2611.15842 (count real transfers) | **Settled as the v0.1 baseline.** Score-based victims are a v0.2 experiment with a measured miss-rate target |
+| `prefetch_layers == 1` (§2, deferred table) | 2508.21706 (speculation hides transfer latency); 2610.39216 (prefill vs decode transfer policy) | **Settled for decode-only.** Depth > 1 is a different design, not a parameter bump |
+| Prefetch does not touch `last_use` (PF-2, §4.1) | 2611.15842: routing "stability" proxies do not imply fewer copies | **Settled**, and now with external support: the clock must measure compute access or replay comparisons break |
+| 4096-byte slot alignment (§2) | Tiered/SSD-streamed designs (MoE-CORE 2610.01950; ZipMoE 2601.21198) all stage aligned records | **Settled**, and it is what makes the v0.2 stage-granular path possible without a layout change |
+| uint16 expert ids (§2) | All three years assume ≪65536 experts | **Settled** for the model class this engine targets |
+
+### 14.1 Two telemetry fields the 2024–2026 record says are mandatory
+
+The v0.1 telemetry in §8 counts hits, misses and stalls. Three years of systems papers converge on two more numbers, and both are nearly
+free to collect:
+
+1. **bytes read per token** — HOBBIT, SliceMoE and 2611.15842 all argue in bytes moved, not in hit percentage. Hit percentage without
+   bytes hides prefetch waste.
+2. **distinct experts touched per layer, per token** — this is the quantity that Lynx (batch), 2410.06270 (redundancy) and MoE-CORE
+   (staging) all reason about; it is also the direct check on whether `n` in §2 is sized sensibly.
+
+Energy per token (2508.06978) is the third, but it needs platform counters; mark it optional in v0.1 rather than faking it from byte counts.
+
+### 14.2 What would falsify a v0.1 choice
+
+Pre-register these before the Gate B run, so a surprising result is informative rather than explained away:
+
+- **Adjacent-layer predictor is worth its cost** fails if predicted-set misses are not materially lower than no-prefetch misses at the
+  same `n`. Then `L` is costing complexity for nothing and v0.1 should ship pure LRU.
+- **`beta` is safe** fails if any nonzero `beta` moves greedy output on the fixed prompt set relative to `beta = 0` at the same cache
+  contents. Then `beta` is an output-changing feature and must be gated like one (SafeStart 2611.06147).
+- **Fixed `slot_bytes` is acceptable** fails if the resident/paged bit-identity gate passes but bytes/token is dominated by padding —
+  the signal that per-expert precision (HOBBIT 2411.01433) has to come earlier than v0.2.
+- **One prefetch policy is enough** fails if a long-prompt run shows stalls that a stage-granular policy would not (PDScope 2610.39216).
+  v0.1 is decode-only, so record this as a known boundary rather than a defect.
+
+---
+
+## 15. ESP32-CLASS TARGETS — WHY v0.1 IS OUT OF SCOPE, AND TWO CACHE LESSONS
+
+**The short version.** A cache whose unit is an expert needs a byte budget measured in hundreds of MB. An ESP32-S3 has 512 KB
+SRAM and at most 8 MB PSRAM, so the smallest useful cache in this design is about 12× larger than the largest possible MCU.
+No interface decision in §§4–11 changes. Three notes are worth keeping because they constrain how the numbers are reported.
+
+### 15.1 Sizing must be stated in KB and MB, not just MB
+
+`slot_bytes` in §10 is sized to the largest expert (~100 MB at Q4). Print the budget in both units in the gate report. The reason is
+not cosmetic: the 2024–2026 MCU literature operates at 32–64 KB (2412.09289 fits a transformer in 64 KB and a Mamba in 32 KB), and a
+report that only says "0.10 GB" hides a 1,600× gap that a reader can otherwise miss. One line in `sizing.md`:
+`budget=104857600 B (100.0 MB); smallest supported client class=64 KB; ratio=1,600×`.
+
+### 15.2 Two lessons that survive the scope boundary
+
+| Lesson | Source | Why it matters to the cache |
+|---|---|---|
+| Nested precision is the cheapest answer to "precision tiers multiply slots" | 2506.17870 (NestQuant): bit-wise integer nesting, INT8 nesting INT6, ResNet-101 78.1%/77.9%, ~78.1% less switching overhead | The v0.1 simplification is fixed `slot_bytes`. When per-expert precision arrives in v0.2, nesting is a better first design than one slot per precision — one stored artifact, page the low bits in/out |
+| LUT matmul is a *performance* path, never a correctness path | 2407.00088 (T-MAC: 4× throughput, 70% less energy vs llama.cpp, 11 tok/s on a Pi 5 at 1.58 bit), 2512.06443 (Vec-LUT, 4.2×, in llama.cpp) | The CPU reference forward must stay f32 for Gate A/B bit-identity. LUT kernels may speed a separate throughput report; if they touch the oracle, the gate is meaningless |
+
+### 15.3 One falsifier for the sizing claim
+
+Pre-register: **"the fixed-slot design is viable on the declared minimum hardware"** fails if total usable RAM is less than four times
+the largest expert slot, because one expert plus KV plus activations no longer fits. On a 4 GB machine with a 100 MB slot that is
+comfortable; on an 8 MB client it fails by two orders of magnitude. That is a device-class error, not a cache bug — which is exactly
+why §9 of `IMPLEMENTATION_RECOMMENDATION.md` adds a device-class gate rather than a fallback path.
+

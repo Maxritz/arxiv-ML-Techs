@@ -65,6 +65,69 @@ The review is correct - this is a local, single-user, one-model engine targeting
 7. **Gates A,B,C** - validation against oracle
 8. **CLI** - prompt in, tokens out, gate report
 
+## 6. 2024–2026 Gap Deltas
+
+The gap list above was set from the Aug–Oct 2026 window. The annual snapshots add **367 MoE-tagged papers** for 2024–2026 (50 / 122 /
+195), none of the 2024–2025 ones cited in this document. The deltas are small and mostly *confirming*, which is the useful result: the
+v0.1 boundary was drawn in about the right place.
+
+**Gaps confirmed as P0 (no change needed, now with three years of support):**
+
+| Gap | Evidence | Note |
+|---|---|---|
+| Expert store `L` + `P` as the core of v0.1 | Fiddler 2402.07033; MoE-Lightning 2411.11217; HOBBIT 2411.01433; 2502.05370; MoE-CORE 2610.01950; Ostinato 2611.11533 | The 2026 local-agent systems are *only* this problem; the priority call was right |
+| Fixed expert ordering before the weighted sum | 2611.15842 (routing-order proxies do not predict transfers) | Ordering is a numerics guarantee, not a performance trick — keep it non-negotiable |
+| Contiguous KV, one session | PiKV 2508.06526 (KV stays dense under MoE) | Skip it because there is one session, not because KV is small |
+
+**Gaps to add to v0.1 (both cheap counters, neither a feature):**
+
+| New item | Why | Cost |
+|---|---|---|
+| **bytes read per token** in telemetry | HOBBIT, SliceMoE 2512.12990, 2611.15842 all argue in bytes moved; hit % without bytes hides prefetch waste | one counter |
+| **explicit "decode-only" phase label** in the gate report | PDScope 2610.39216: prefill wants aggressive loading, decode wants conservative transfers; inheriting one policy silently is a later bug | one line of output |
+
+**Gaps that stay out, now with explicit reasons:**
+
+| Item from the literature | Why it stays out of v0.1 |
+|---|---|
+| Mixed-precision / cross-precision expert slots (HOBBIT 2411.01433, MatMoE 2611.01704, PagedMoE 2611.03173) | Real, but it multiplies slot bookkeeping; record fixed `slot_bytes` as a simplification with a v0.2 path |
+| Phase-split scheduling (DuoServe-MoE 2509.07379, layered prefill 2510.08055, MoE-CORE 2610.01950) | Needs a prefill path to be meaningful; v0.1 has none |
+| Speculative decoding (2508.21706 vs SP-MoE 2510.10302) | The sign of the offload interaction is unresolved; it is an experiment, not a phase |
+| Disaggregation (Janus 2512.13525, MegaScale-Infer 2504.02263, AFD 2605.28302) | Multi-device, multi-tenant assumptions |
+| Serverless / multi-tenant experts (MoEless 2603.06350, EaaS 2509.17863, CrossPool 2606.24506) | Fleet-scale systems |
+| Resilience (Tarragon 2601.01310, ReviveMoE 2602.21140) | A single workstation does not have fleet failure modes |
+| Batch-aware expert selection (Lynx 2411.08982, D2MoE 2504.15299) | Changes outputs, and batch-1 removes the motivation |
+
+**One correction to the reasoning, not the scope:** §1's "SSD offloading is core" remains true for *capacity*, but 2508.06978 shows SSD
+read energy per bit is far above DRAM's, so SSD tiering is not an efficiency claim. Say capacity, and leave energy as optional telemetry.
+
+## 7. ESP32 / MCU-Class Gap Register
+
+**No new P0 or P1.** The gap list in §1 is unchanged, and no MCU work belongs in v0.1. The scan does add one explicit non-goal and one
+small real gap.
+
+**Explicit non-goal (write it down so it stops being re-litigated):** MCU/ESP32 inference. One Q4 expert is ~100 MB against 8 MB of
+PSRAM on an ESP32-S3; a 0.5B 4-bit model is ~250 MB. The tier that does exist above MCU is SBC class, and even there the ceiling is
+about 1.5B params with runtime choice moving throughput 4× (2511.07425).
+
+**The one real gap:** §1 never states a minimum hardware contract. Add it: *targets ≥ X GB usable RAM; MCU-class devices are clients.*
+Without it, "runs on low-end hardware" is unfalsifiable.
+
+| Item | In scope for v0.1? | Why |
+|---|---|---|
+| TinyML on MCU (2412.09289: 64 KB transformer, 32 KB Mamba) | No | Below the model class this engine loads by four orders of magnitude |
+| Hierarchical inference client (2406.09424) | Only if a board exists | Correct pattern for a sensor client; no host-side code changes |
+| On-device LoRA at the extreme edge (2603.09511) | No | −23% memory and 15× fewer trainables is impressive at 0.28M params; irrelevant at 12B |
+| Ternary ROM / FPGA accelerators (2602.20662, 2510.15926) | No | Custom silicon; 2510.15926 is a 5 W FPGA at 25 tok/s |
+| Design-time energy prediction (2608.03589) | Checklist only | 16.6% WAPE on Cortex-M4; useful before deploying an auxiliary model, not for the engine itself |
+| SBC benchmarks and energy studies (2511.07425, 2511.11624) | Reference only | Define the tier above MCU; 1.5B-param ceiling, GPU vs CPU energy ordering |
+
+**Cheap addition:** a `device_class` field in the telemetry header. One string, and the gate report becomes self-describing.
+
+**One correction to a common reading:** "fewer parameters means faster on the target" is false on scalar cores — 2608.00737 measured
+13.5×/8.0× latency and 11.3×/5.6× energy penalties for the parameter-efficient architecture, plus up to 43× earlier INT8 divergence.
+Parameter count is not a deployment-cost proxy, and this belongs in the caveats, not the roadmap.
+
 ## Bottom Line
 
 This is a **correctness-first, local MoE engine**. Expert disk paging is not optional - it's core to making Mellum2.1 run. The previous roadmap was generic server engineering; this is purpose-built for constrained local hardware. Gates with bit-identical requirements (for same-backend paging) are non-negotiable.
